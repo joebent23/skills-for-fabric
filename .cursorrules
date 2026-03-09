@@ -1,0 +1,94 @@
+# Microsoft Fabric Development Rules
+
+> **Update Check**: At session start, check for skills-for-fabric updates by reading the remote `package.json` version from `https://github.com/gim-home/skills-for-fabric` (via `git fetch origin main --quiet && git show origin/main:package.json` or GitHub API with authentication) and comparing with the local `package.json` version. Show changelog if update available.
+
+## Context
+This project works with Microsoft Fabric for data engineering, warehousing, and analytics.
+Primary API reference: https://learn.microsoft.com/en-us/rest/api/fabric/articles/
+
+## Development Guide
+For authentication and deployment patterns, see **DEVELOPMENT-GUIDE.md** at repository root.
+
+## Authentication
+All operations require Azure AD tokens via `az login`:
+```bash
+az login
+az account get-access-token --resource https://api.fabric.microsoft.com
+```
+
+## Developer Pattern: REST + Protocol
+Developers use REST APIs to manage artifacts, then protocol-specific connections to access data:
+- REST → ODBC for Warehouse
+- REST → Spark for Lakehouse
+- REST → XMLA/DAX for Semantic Models
+- REST → KQL for Real-Time Intelligence
+
+## Code Generation Rules
+
+### Lakehouse & Spark
+- Always use Delta Lake format for tables
+- Use mssparkutils for Fabric-specific operations (fs, credentials, notebook)
+- Include partition columns for large tables
+- Run OPTIMIZE and VACUUM for table maintenance
+
+### Warehouse (T-SQL)
+- Check T-SQL surface area - not all SQL Server features are supported
+- Use CTAS for large transformations
+- Prefer stored procedures for reusable logic
+- Always include TOP/LIMIT when exploring data
+
+### Notebooks
+- Tag first cell as "parameters" for parameterized notebooks
+- Use mssparkutils.credentials.getSecret() for secrets
+- Structure with clear markdown headers
+
+### Pipelines
+- Use expressions for dynamic content: @pipeline().parameters.Name
+- Implement error handling with failure activities
+- Add retry policies for transient failures
+
+### KQL (Real-Time Intelligence)
+- Always include time filters: where Timestamp > ago(1h)
+- Use summarize for aggregations
+- Prefer materialized views for frequent queries
+
+### Semantic Models (DAX)
+- Prefer measures over calculated columns
+- Use DIVIDE() for safe division
+- Document complex measures with comments
+
+### Data Agents
+- Use Python SDK within Fabric notebooks for rapid prototyping
+- Provide custom instructions for domain-specific terminology
+- Add few-shot examples to improve query accuracy
+- Limit data sources to 5 maximum per agent
+
+### Data Agent Evaluation
+- Use pandas DataFrame with question/expected_answer columns
+- Validate few-shot examples before adding to agents
+- Test sandbox stage before production
+- Track evaluation accuracy over time
+
+## File Patterns
+
+### PySpark Notebook
+```python
+# Parameters cell (tag as "parameters")
+input_table = "default_table"
+
+# Main logic
+df = spark.read.format("delta").load(f"Tables/{input_table}")
+```
+
+### T-SQL
+```sql
+-- Always limit exploratory queries
+SELECT TOP 100 * FROM dbo.TableName WHERE DateColumn >= '2024-01-01';
+```
+
+### KQL
+```kql
+TableName
+| where Timestamp > ago(24h)
+| summarize Count=count() by bin(Timestamp, 1h)
+```

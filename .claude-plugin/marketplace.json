@@ -1,0 +1,105 @@
+{
+  "name": "fabric-collection",
+  "metadata": {
+    "description": "Microsoft Skills for Fabric collection for GitHub Copilot CLI",
+    "version": "0.2.6"
+  },
+  "owner": {
+    "name": "bocrivat_microsoft",
+    "email": "bocrivat@microsoft.com"
+  },
+  "plugins": [
+    {
+      "name": "fabric-skills",
+      "source": "./",
+      "description": "Complete bundle: all Microsoft Skills for Fabric for developers and consumers",
+      "version": "0.2.6",
+      "skills": [
+        "./skills/check-updates",
+        "./skills/powerbi-consumption-cli",
+        "./skills/sqldw-consumption-cli",
+        "./skills/sqldw-authoring-cli",
+        "./skills/spark-consumption-cli",
+        "./skills/spark-authoring-cli",
+        "./skills/eventhouse-consumption-cli",
+        "./skills/eventhouse-authoring-cli",
+        "./skills/e2e-medallion-architecture"
+      ],
+      "agents": [
+        "./agents/FabricAdmin.agent.md",
+        "./agents/FabricDataEngineer.agent.md",
+        "./agents/FabricAppDev.agent.md"
+      ],
+      "keywords": [
+        "fabric",
+        "microsoft-fabric",
+        "medallion",
+        "data-warehouse",
+        "lakehouse",
+        "analytics",
+        "kql",
+        "kusto",
+        "eventhouse",
+        "real-time-intelligence"
+      ]
+    },
+    {
+      "name": "fabric-authoring",
+      "source": "./",
+      "description": "Developer skills for authoring Microsoft Skills for Fabric solutions - SDKs, APIs, automation scripts, CI/CD",
+      "version": "0.2.6",
+      "skills": [
+        "./skills/check-updates",
+        "./skills/sqldw-authoring-cli",
+        "./skills/spark-authoring-cli",
+        "./skills/eventhouse-authoring-cli",
+        "./skills/e2e-medallion-architecture"
+      ],
+      "agents": [
+        "./agents/FabricAdmin.agent.md",
+        "./agents/FabricDataEngineer.agent.md",
+        "./agents/FabricAppDev.agent.md"
+      ],
+      "mcpServers": {},
+      "repository": "https://github.com/microsoft/skills-for-fabric",
+      "keywords": [
+        "fabric",
+        "microsoft-fabric",
+        "authoring",
+        "developer",
+        "medallion",
+        "sdk",
+        "api"
+      ],
+      "license": "MIT"
+    },
+    {
+      "name": "fabric-consumption",
+      "source": "./",
+      "description": "Consumer skills for interactive Microsoft Skills for Fabric operations - queries, exploration, monitoring",
+      "version": "0.2.6",
+      "skills": [
+        "./skills/check-updates",
+        "./skills/powerbi-consumption-cli",
+        "./skills/sqldw-consumption-cli",
+        "./skills/spark-consumption-cli",
+        "./skills/eventhouse-consumption-cli"
+      ],
+      "agents": [
+        "./agents/FabricAdmin.agent.md",
+        "./agents/FabricDataEngineer.agent.md",
+        "./agents/FabricAppDev.agent.md"
+      ],
+      "mcpServers": {},
+      "repository": "https://github.com/microsoft/skills-for-fabric",
+      "keywords": [
+        "fabric",
+        "microsoft-fabric",
+        "consumption",
+        "query",
+        "exploration"
+      ],
+      "license": "MIT"
+    }
+  ]
+}

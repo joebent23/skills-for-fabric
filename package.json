@@ -1,0 +1,42 @@
+{
+  "name": "@microsoft/skills-for-fabric",
+  "version": "0.2.6",
+  "description": "AI coding assistant skills for Microsoft Fabric developers and consumers",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/microsoft/skills-for-fabric.git"
+  },
+  "keywords": [
+    "fabric",
+    "microsoft-fabric",
+    "copilot",
+    "github-copilot",
+    "claude",
+    "ai-skills",
+    "data-engineering",
+    "data-warehouse",
+    "lakehouse",
+    "power-bi"
+  ],
+  "author": "Microsoft",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/microsoft/skills-for-fabric/issues"
+  },
+  "homepage": "https://github.com/microsoft/skills-for-fabric#readme",
+  "files": [
+    "agents/**",
+    "skills/**",
+    "mcp-setup/**",
+    "compatibility/**",
+    "install.ps1",
+    "install.sh",
+    "plugin.json"
+  ],
+  "scripts": {
+    "postinstall": "node -e \"console.log('\\n✅ Skills for Fabric installed. Run install.ps1 (Windows) or install.sh (Unix) to configure your AI tools.\\n')\"",
+    "test": "pytest",
+    "test:semantic": "pytest -m semantic",
+    "test:integration": "pytest -m integration"
+  }
+}

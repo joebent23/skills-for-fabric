@@ -1,0 +1,67 @@
+# Microsoft Fabric Development Rules for Windsurf
+
+# Update Check: At session start, check for skills-for-fabric updates by reading the
+# remote package.json version from https://github.com/gim-home/skills-for-fabric
+# (via "git fetch origin main --quiet && git show origin/main:package.json"
+# or GitHub API with authentication) and comparing with the local package.json
+# version. Show changelog if update available.
+
+project_context: |
+  This project uses Microsoft Fabric for data engineering, warehousing, and analytics.
+  Primary API reference: https://learn.microsoft.com/en-us/rest/api/fabric/articles/
+  For authentication and deployment patterns, see DEVELOPMENT-GUIDE.md at repository root.
+
+rules:
+  # Lakehouse & Spark
+  - name: delta_lake_format
+    description: Always use Delta Lake format for Lakehouse tables
+    pattern: "spark.write.format(\"delta\")"
+    
+  - name: mssparkutils_usage
+    description: Use mssparkutils for Fabric-specific operations
+    applies_to: ["*.py", "*.ipynb"]
+    
+  - name: spark_optimization
+    description: Run OPTIMIZE and VACUUM for Delta table maintenance
+    
+  # Warehouse
+  - name: tsql_surface_area
+    description: Check T-SQL surface area - not all SQL Server features supported
+    reference: https://learn.microsoft.com/en-us/fabric/data-warehouse/tsql-surface-area
+    
+  - name: limit_queries
+    description: Always use TOP/LIMIT when exploring data
+    pattern: "SELECT TOP"
+    
+  # KQL
+  - name: kql_time_filter
+    description: Always include time filters in KQL queries
+    pattern: "where Timestamp > ago("
+    
+  # Security
+  - name: no_hardcoded_secrets
+    description: Never hardcode credentials - use Key Vault or environment variables
+    forbidden_patterns:
+      - "password="
+      - "secret="
+      - "connectionstring="
+      
+  # Architecture
+  - name: medallion_architecture
+    description: Prefer Bronze/Silver/Gold data organization
+    
+best_practices:
+  - Use parameterized notebooks and pipelines
+  - Implement incremental processing over full refreshes
+  - Document DAX measures with comments
+  - Use REST APIs for programmatic Fabric management
+
+documentation_links:
+  lakehouse: https://learn.microsoft.com/en-us/fabric/data-engineering/lakehouse-overview
+  warehouse: https://learn.microsoft.com/en-us/fabric/data-warehouse/data-warehousing
+  notebooks: https://learn.microsoft.com/en-us/fabric/data-engineering/how-to-use-notebook
+  pipelines: https://learn.microsoft.com/en-us/fabric/data-factory/data-factory-overview
+  kql: https://learn.microsoft.com/en-us/fabric/real-time-intelligence/create-database
+  semantic_models: https://learn.microsoft.com/en-us/power-bi/connect-data/service-datasets-understand
+  data_agents: https://learn.microsoft.com/en-us/fabric/data-science/concept-data-agent
+  data_agent_evaluation: https://learn.microsoft.com/en-us/fabric/data-science/fabric-data-agent-sdk
