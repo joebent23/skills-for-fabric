@@ -137,6 +137,8 @@ To deploy specific items only:
 }
 ```
 
+> **The `note` field is write-only** — it is accepted in deploy requests but NOT retrievable via the REST API. Notes are visible only in the Fabric portal's deployment pipeline UI. For programmatic audit trails, log deployment metadata externally (e.g., in Git commit messages or CI/CD pipeline logs).
+
 ### Step 5: Poll for Completion
 
 The deploy call returns `202 Accepted` with `Location` and `x-ms-operation-id` headers. Extract the operation ID and poll until complete.
@@ -193,6 +195,10 @@ Write-Host "Deployment complete"
 
 > **Concurrency constraint**: Only one deployment pipeline operation can run at a time per pipeline. If you get `WorkspaceMigrationOperationInProgress` (HTTP 400), wait for the current operation to finish before retrying. Always poll the previous operation to completion before starting the next stage promotion.
 
+> **Extracting the operation ID**: The deploy call returns `202 Accepted` with the operation ID in the `x-ms-operation-id` response header. With `az rest`, capture this via `--verbose` and parse stderr. For more reliable header access in automation, consider using Python `requests` or `curl -i` instead of `az rest` for the deploy call.
+
+> **Tip**: The create pipeline response includes stage IDs inline — you can skip the separate "Get stages" call if you parse the create response directly.
+
 ### Complete API Reference
 
 | Operation | Method | Endpoint |
@@ -238,5 +244,9 @@ This gives Git-based collaboration plus Fabric-native promotion with:
 - **Folders are preserved** during deployment — item hierarchy is maintained
 - Power BI semantic models must use **Enhanced Metadata** format (non-enhanced support is retired)
 - Some items are in preview and may have limited deployment support
+- Stage comparison is available in the **Fabric portal UI only** — there is no REST API for programmatic comparison between stages. For automated change detection, compare item definitions between workspaces using `GET /v1/workspaces/{id}/items`
+- Workspace assignment returns **HTTP 200 with an empty body** on success — no confirmation payload is returned
+- A workspace can only be assigned to **one pipeline stage at a time**. Assigning a workspace that is already in another pipeline silently reassigns it
+- Use `GET /v1/deploymentPipelines/{id}/stages/{stageId}/items` to check `lastDeploymentTime` per item — this is the best way to verify what was deployed and when
 
 > Ref: https://learn.microsoft.com/fabric/cicd/deployment-pipelines/understand-the-deployment-process

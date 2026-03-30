@@ -379,6 +379,8 @@ find_replace:
 
 > The `environment` parameter passed to `FabricWorkspace()` must match a key in `replace_value`.
 
+> **When parameter.yml is NOT needed**: If your items do not contain hardcoded GUIDs from the dev workspace (e.g., plain notebooks that don't use `%%configure` with lakehouse IDs, or items that use variable libraries for all environment-specific values), you can omit `parameter.yml` entirely. The `environment` parameter on `FabricWorkspace` is also optional when no parameterization is needed.
+
 ### Service Principal Authentication for CI/CD
 
 Service principal (SPN) authentication is required for unattended CI/CD. Setup requires:
@@ -676,5 +678,6 @@ Not all Fabric items support Git integration and deployment equally. Before buil
 | `WorkspaceMigrationOperationInProgress` (HTTP 400) | Concurrent deployment pipeline operations | Only one pipeline operation can run at a time; wait for current operation to complete before retrying |
 | `No matching distribution found` for fabric-cicd | Python version 3.14+ not yet supported | Use Python 3.9–3.13; on Windows use `py -3.13`, on Linux use `pyenv` to select a compatible version |
 | `createdBy` blank on Power BI items | Identity attribution differs by item type and deployment mechanism | Use a single SPN identity for all deployments; see [Identity Best Practices](#identity-best-practices) |
+| `PyToIPynbFailure: prologue is invalid` | Notebook `.py` file doesn't start with required prologue | The first line of any `.py` notebook file MUST be exactly `# Fabric notebook source`. No comments, blank lines, or other content before it |
 
 > Ref: https://learn.microsoft.com/fabric/cicd/troubleshoot-cicd

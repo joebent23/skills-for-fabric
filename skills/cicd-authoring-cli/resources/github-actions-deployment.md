@@ -25,10 +25,11 @@ Before any automated deployment works, the SPN must be configured:
 
 1. **Create Entra ID app registration** at https://entra.microsoft.com → App registrations
 2. **Create a client secret** under Certificates & secrets (note expiry — rotate before it expires)
-3. **Enable tenant setting**: Fabric Admin Portal → Tenant Settings → Developer settings → "Service principals can use Fabric APIs" → Enable and add the SPN (or its security group) to the allowlist
-4. **Add SPN to workspaces**: In each target workspace (dev, test, prod) → Manage access → Add the SPN as **Member** or **Admin**
+3. **Create the enterprise application (service principal)** — the app registration alone is not enough. Run `az ad sp create --id <appId>` to create the service principal object. This gives you the **object ID** needed for workspace role assignments.
+4. **Enable tenant setting**: Fabric Admin Portal → Tenant Settings → Developer settings → "Service principals can use Fabric APIs" → Enable and add the SPN (or its security group) to the allowlist. If this setting is scoped to a specific security group, you must also add the SPN to that group: `az ad group member add --group <group-name-or-id> --member-id <spn-object-id>`
+5. **Add SPN to workspaces**: In each target workspace (dev, test, prod) → Manage access → Add the SPN as **Member** or **Admin**
 
-Without steps 3 and 4, all API calls from the SPN will return `403 Forbidden`.
+Without steps 4 and 5, all API calls from the SPN will return `403 Forbidden`.
 
 ## Secrets Configuration
 
@@ -54,6 +55,8 @@ For gated deployments, create **GitHub Environments** at Settings → Environmen
 
 Add the SPN secrets (`AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`) at the repository level. Add the workspace-specific `WORKSPACE_NAME` at each environment level.
 
+> **Note**: GitHub environments must be created before setting variables on them. Create environments via Settings → Environments in the GitHub UI, or via the API: `gh api --method PUT repos/{owner}/{repo}/environments/{name}`. Setting variables on a non-existent environment returns 404.
+
 ## Branch Strategy
 
 ### Recommended: Branch-per-stage with PR promotion
@@ -71,6 +74,8 @@ dev branch ──[PR]──► test branch ──[PR]──► main/prod branch
 - **`main`/`prod` branch**: NOT connected to a workspace. Receives promoted items via PR from test. Pipeline deploys to prod workspace.
 
 Only `dev` is Git-connected because `fabric-cicd` handles deployment to test/prod via REST APIs.
+
+> **Branch naming**: The workflow triggers on `test` and `prod` branches. GitHub creates repositories with `main` as the default branch. You should either: (a) create a separate `prod` branch and use `main` for development/integration, or (b) rename the trigger to `main` instead of `prod` and use `main` as your production branch. Choose one approach and be consistent.
 
 ### Alternative: Trunk-based with environment parameter
 
@@ -111,7 +116,7 @@ jobs:
           python-version: '3.12'
 
       - name: Install fabric-cicd
-        run: pip install fabric-cicd azure-identity
+        run: pip install fabric-cicd azure-identity requests
 
       - name: Deploy to Fabric workspace
         env:

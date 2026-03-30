@@ -230,7 +230,13 @@ if not workspace_id:
     raise ValueError(f"Workspace '{workspace_name}' not found")
 
 # Parse items_in_scope and deploy
-item_types = ast.literal_eval(args.items_in_scope)
+# Parse items_in_scope — handle both quoted and unquoted list formats
+raw = args.items_in_scope
+try:
+    item_types = ast.literal_eval(raw)
+except (ValueError, SyntaxError):
+    cleaned = raw.strip("[]")
+    item_types = [s.strip().strip("'\"") for s in cleaned.split(",") if s.strip()]
 
 target = FabricWorkspace(
     workspace_id=workspace_id,
@@ -243,6 +249,8 @@ target = FabricWorkspace(
 publish_all_items(target)
 unpublish_all_orphan_items(target)
 ```
+
+> **ADO YAML gotcha**: `${{ parameters.items_in_scope }}` strips quotes from list items during expansion. The fallback parser handles both `["Notebook","Lakehouse"]` (quoted) and `[Notebook,Lakehouse]` (unquoted) formats.
 
 ### How the workspace name resolution works
 
@@ -269,5 +277,8 @@ Key tokens for replacement:
 - Use `change_log_level("DEBUG")` during initial setup — remove after confirming
 - The `deployment` job type (not `job`) is required for ADO Environments to work
 - When pipeline triggers on a branch merge, `Build.SourceBranch` contains the target branch name
+- PR merge commits may not trigger CI triggers in ADO — if the pipeline does not auto-trigger after merging a PR, run it manually via `az pipelines run --branch <branch>` or configure a build completion trigger
+- Key Vault-linked variable groups cannot be created via `az pipelines variable-group create` — use the ADO portal UI or the ADO REST API (`PUT /_apis/distributedtask/variablegroups`) with `type: AzureKeyVault`
+- After creating a pipeline, you must authorize it to access variable groups, environments, and service endpoints. First-run may stall at "Authorization pending" until resources are authorized via the ADO portal
 
 > Ref: https://learn.microsoft.com/fabric/cicd/git-integration/intro-to-git-integration#azure-devops-limitations
