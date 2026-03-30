@@ -210,13 +210,98 @@ Provision separate workspaces for each environment stage. Guide the LLM to gener
 
 1. **Create workspaces** via REST API — one per environment (dev, test, prod)
 2. **Assign capacity** — each workspace must have Fabric capacity for item creation
-3. **Assign roles** — add SPN as Member/Admin; add team members with appropriate roles
-4. **Configure Git integration** on the dev workspace (connect to repo branch)
+3. **Grant SPN access** — add the service principal as Member or Admin on each workspace
+4. **Grant team member access** — add users/groups with appropriate roles
+5. **Configure Git integration** on the dev workspace (connect to repo branch)
 
 > Ref: [COMMON-CORE.md § Create Workspace](../../common/COMMON-CORE.md#create-workspace)
 > Ref: [COMMON-CORE.md § Workspace Role Assignment](../../common/COMMON-CORE.md#workspace-role-assignment)
 
 Workspace naming convention: `{project}-{env}` (e.g., `sales-analytics-dev`, `sales-analytics-test`, `sales-analytics-prod`)
+
+### Granting Workspace Access Programmatically
+
+This is a critical CI/CD prerequisite — if the SPN lacks workspace access, all deployments fail with `403 Forbidden`.
+
+**Step 1: Find the SPN's object ID**
+
+The role assignment API requires the SPN's **object ID** (also called the enterprise application / service principal object ID), NOT the application (client) ID.
+
+```bash
+# Find the SPN object ID from the application (client) ID
+az rest --method get \
+  --url "https://graph.microsoft.com/v1.0/servicePrincipals?\$filter=appId eq '<client-id>'" \
+  --query "value[0].id" -o tsv
+```
+
+Alternatively, find it in the Azure portal: Entra ID → Enterprise applications → search by app name → copy the **Object ID**.
+
+**Step 2: Add the SPN to the workspace**
+
+```bash
+# Grant SPN "Member" role on the workspace
+az rest --method post \
+  --resource https://api.fabric.microsoft.com \
+  --url "https://api.fabric.microsoft.com/v1/workspaces/<workspaceId>/roleAssignments" \
+  --body '{
+    "principal": {
+      "id": "<spn-object-id>",
+      "type": "ServicePrincipal"
+    },
+    "role": "Member"
+  }'
+```
+
+Available roles: `Admin`, `Member`, `Contributor`, `Viewer`. For CI/CD deployments, use **Member** (can create and modify items) or **Admin** (full control including workspace settings and Git connection).
+
+**Step 3: Add users or groups**
+
+```bash
+# Grant a user "Contributor" role
+az rest --method post \
+  --resource https://api.fabric.microsoft.com \
+  --url "https://api.fabric.microsoft.com/v1/workspaces/<workspaceId>/roleAssignments" \
+  --body '{
+    "principal": {
+      "id": "<user-or-group-object-id>",
+      "type": "User"
+    },
+    "role": "Contributor"
+  }'
+```
+
+For groups, use `"type": "Group"` with the Entra security group's object ID.
+
+**Step 4: Verify access**
+
+```bash
+# List current role assignments on a workspace
+az rest --method get \
+  --resource https://api.fabric.microsoft.com \
+  --url "https://api.fabric.microsoft.com/v1/workspaces/<workspaceId>/roleAssignments"
+```
+
+### Granting Access via Fabric UI (Manual Fallback)
+
+When programmatic access is not possible (e.g., initial setup by a tenant admin):
+
+1. Open the Fabric portal → navigate to the workspace
+2. Click **Manage access** (gear icon or "..." menu → Manage access)
+3. Click **Add people or groups**
+4. Search for the SPN by its app registration display name
+5. Select the role: **Member** (recommended for CI/CD) or **Admin**
+6. Click **Add**
+
+> **Note**: The SPN only appears in the search if "Service principals can use Fabric APIs" is enabled in tenant settings.
+
+### Role Selection Guide for CI/CD
+
+| Role | Can deploy items | Can manage Git connection | Can manage workspace settings | Recommended for |
+|---|---|---|---|---|
+| **Admin** | ✅ | ✅ | ✅ | SPN that manages full lifecycle including Git setup |
+| **Member** | ✅ | ❌ | ❌ | SPN used only for `fabric-cicd` deployments |
+| **Contributor** | ✅ | ❌ | ❌ | Team members who deploy but don't manage workspace |
+| **Viewer** | ❌ | ❌ | ❌ | Read-only access — not for CI/CD |
 
 ### Variable Libraries
 
