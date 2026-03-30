@@ -274,30 +274,90 @@ Prefer deployment pipelines when:
 > Ref: https://microsoft.github.io/fabric-cicd/latest/
 > Ref: https://learn.microsoft.com/rest/api/fabric/articles/fabric-ci-cd
 
-**Key capabilities:**
-- Full, deterministic deployments from source control to workspace
-- Automatic dependency resolution (deploys semantic models before reports)
-- Environment-specific GUID replacement via `parameter.yml`
-- Orphan cleanup for items removed from source
-- Works with GitHub Actions, Azure DevOps, and local development
+**Supported item types:** ApacheAirflowJob, CopyJob, DataAgent, DataPipeline, Dataflow, Environment, Eventhouse, Eventstream, GraphQLApi, KQLDashboard, KQLDatabase, KQLQueryset, Lakehouse, MirroredDatabase, MLExperiment, MountedDataFactory, Notebook, Reflex, Report, SemanticModel, SparkJobDefinition, SQLDatabase, UserDataFunction, VariableLibrary, Warehouse.
 
-**Supported item types include:** Notebook, DataPipeline, Lakehouse, SemanticModel, Report, Environment, Warehouse, Eventhouse, Eventstream, KQLDatabase, KQLQueryset, SparkJobDefinition, VariableLibrary, and more. See the full list at the library documentation.
+#### FabricWorkspace Constructor
 
-**Core pattern:**
+Import from `fabric_cicd`. Guide the LLM to construct with these parameters:
 
-```python
-from fabric_cicd import FabricWorkspace, publish_all_items, unpublish_all_orphan_items
+| Parameter | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `workspace_id` | `str` | One of `workspace_id` or `workspace_name` | `None` | Target workspace GUID. Takes precedence if both provided |
+| `workspace_name` | `str` | One of `workspace_id` or `workspace_name` | `None` | Target workspace display name — resolved to ID via API |
+| `repository_directory` | `str` | Yes | — | Local directory path containing item definition folders |
+| `environment` | `str` | For parameterization | `"N/A"` | Must match a key in `parameter.yml` `replace_value` (e.g., `"test"`, `"prod"`) |
+| `item_type_in_scope` | `list[str]` | No | All types | Limits which item types are deployed (e.g., `["Notebook", "Lakehouse"]`) |
+| `token_credential` | `TokenCredential` | No | `DefaultAzureCredential` | From `azure-identity` — use `ClientSecretCredential` for SPN auth |
 
-target = FabricWorkspace(
-    workspace_id="<workspace-guid>",
-    repository_directory="<path-to-git-repo-items>",
-    environment="<target-env>",
-    item_type_in_scope=["Notebook", "DataPipeline", "Lakehouse", "Environment"],
-)
+#### publish_all_items
 
-publish_all_items(target)
-unpublish_all_orphan_items(target)
-```
+Deploys all in-scope items from the repository to the target workspace. Handles dependency ordering automatically (e.g., semantic models before reports).
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `fabric_workspace_obj` | `FabricWorkspace` | — | Required: the workspace object |
+| `item_name_exclude_regex` | `str` | `None` | Regex to skip items by name (e.g., `".*_draft"`) |
+| `folder_path_exclude_regex` | `str` | `None` | Regex to skip folders — **experimental**, requires `enable_experimental_features` + `enable_exclude_folder` flags |
+| `folder_path_to_include` | `list[str]` | `None` | Deploy only from these folders (e.g., `["/release"]`) — **experimental**, requires `enable_experimental_features` + `enable_include_folder` flags |
+| `items_to_include` | `list[str]` | `None` | Deploy only these items (format: `"ItemName.ItemType"`) — **experimental**, requires `enable_experimental_features` + `enable_items_to_include` flags |
+| `shortcut_exclude_regex` | `str` | `None` | Regex to skip Lakehouse shortcuts — **experimental**, requires `enable_shortcut_exclude` + `enable_shortcut_publish` flags |
+
+#### unpublish_all_orphan_items
+
+Removes items from the workspace that are no longer in the repository. Only affects item types in `item_type_in_scope`.
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `fabric_workspace_obj` | `FabricWorkspace` | — | Required: the workspace object |
+| `item_name_exclude_regex` | `str` | `"^$"` | Regex to preserve items from deletion (e.g., `".*_keep"`) |
+| `items_to_include` | `list[str]` | `None` | Only unpublish these specific items — **experimental** |
+
+#### deploy_with_config
+
+A simplified alternative that uses a YAML config file. The LLM should generate the config file and call `deploy_with_config(config_file_path, environment, token_credential)`. Returns a `DeploymentResult` with `status` (`COMPLETED` / `FAILED`), `message`, and optional `responses`.
+
+> Ref: https://microsoft.github.io/fabric-cicd/latest/code_reference/#fabric_cicd.deploy_with_config
+
+#### Feature Flags
+
+Feature flags enable opt-in capabilities. Call `append_feature_flag("<flag>")` **before** `publish_all_items` or `unpublish_all_orphan_items`.
+
+**Data safety flags** — required for `unpublish_all_orphan_items` to delete data-containing items:
+
+| Flag | Enables Deletion Of |
+|---|---|
+| `enable_lakehouse_unpublish` | Lakehouses |
+| `enable_warehouse_unpublish` | Warehouses |
+| `enable_eventhouse_unpublish` | Eventhouses |
+| `enable_kqldatabase_unpublish` | KQL Databases |
+| `enable_sqldatabase_unpublish` | SQL Databases |
+
+> **Critical**: Without these flags, `unpublish_all_orphan_items()` warns but skips these item types. This prevents accidental data loss. Enable only when you intend for orphan cleanup to remove stale data-containing items.
+
+**Deployment behaviour flags:**
+
+| Flag | Purpose |
+|---|---|
+| `enable_shortcut_publish` | Deploy Lakehouse shortcuts alongside the Lakehouse item |
+| `enable_shortcut_exclude` | Allow `shortcut_exclude_regex` parameter (selective shortcut deployment) |
+| `enable_exclude_folder` | Allow `folder_path_exclude_regex` parameter (skip folders) |
+| `enable_include_folder` | Allow `folder_path_to_include` parameter (deploy only specific folders) |
+| `enable_items_to_include` | Allow `items_to_include` parameter (selective item deployment) |
+| `enable_experimental_features` | Required prerequisite for `enable_exclude_folder`, `enable_include_folder`, and `enable_items_to_include` |
+| `enable_environment_variable_replacement` | Use CI/CD pipeline variables for replacement instead of `parameter.yml` |
+| `continue_on_shortcut_failure` | Continue deployment if shortcuts fail to publish (instead of stopping) |
+
+**Operational flags:**
+
+| Flag | Purpose |
+|---|---|
+| `enable_response_collection` | Collect API responses — access via `workspace.responses` after deployment |
+| `disable_print_identity` | Suppress the executing identity name from log output |
+| `disable_workspace_folder_publish` | Skip deploying workspace subfolder structure |
+
+#### Logging and Debugging
+
+Call `change_log_level("DEBUG")` to enable verbose output showing all API calls. Logs are written to `fabric_cicd.error.log` by default. Call `disable_file_logging()` for console-only output.
 
 ### Parameter Files for GUID Replacement
 
@@ -317,7 +377,7 @@ find_replace:
       PROD: "prod-lakehouse-guid"
 ```
 
-> The `environment` parameter passed to `FabricWorkspace()` must match a key in `replace_with`.
+> The `environment` parameter passed to `FabricWorkspace()` must match a key in `replace_value`.
 
 ### Service Principal Authentication for CI/CD
 
