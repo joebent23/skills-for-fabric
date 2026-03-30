@@ -29,6 +29,7 @@ Fabric REST APIs: https://learn.microsoft.com/en-us/rest/api/fabric/articles/
 | Semantic Models | https://learn.microsoft.com/en-us/power-bi/connect-data/service-datasets-understand |
 | Data Agents | https://learn.microsoft.com/en-us/fabric/data-science/concept-data-agent |
 | Data Agent Evaluation | https://learn.microsoft.com/en-us/fabric/data-science/fabric-data-agent-sdk |
+| CI/CD & Lifecycle Management | https://learn.microsoft.com/en-us/fabric/cicd/cicd-overview |
 
 ## Key Patterns
 

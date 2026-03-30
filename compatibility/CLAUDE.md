@@ -86,6 +86,13 @@ https://learn.microsoft.com/en-us/rest/api/fabric/articles/
 - **Data Agent Evaluation**: Testing and validating Data Agent accuracy
   - Docs: https://learn.microsoft.com/en-us/fabric/data-science/fabric-data-agent-sdk
 
+### CI/CD & Lifecycle Management
+- **CI/CD Overview**: Git integration, deployment pipelines, variable libraries
+  - Docs: https://learn.microsoft.com/en-us/fabric/cicd/cicd-overview
+  - Skill: `skills/cicd-authoring-cli/SKILL.md` — fabric-cicd library, Git integration, deployment pipelines, workspace provisioning, variable libraries
+  - Primary tool: `fabric-cicd` Python library for code-first deployments
+  - Alternative: Fabric deployment pipeline REST APIs for stage-to-stage promotion
+
 ## Best Practices
 
 ### Must

@@ -79,6 +79,14 @@ Developers use REST APIs to manage artifacts, then protocol-specific connections
 - Test sandbox stage before production
 - Track evaluation accuracy over time
 
+### CI/CD & Lifecycle Management
+- Use `fabric-cicd` Python library for code-first deployments from source control
+- Use `parameter.yml` for environment-specific GUID replacement (workspace IDs, lakehouse IDs)
+- Store SPN credentials in Azure Key Vault, never in source code
+- Use separate workspaces per environment (dev/test/prod)
+- Use variable libraries for stage-aware configuration
+- Authoring skill: `skills/cicd-authoring-cli/SKILL.md`
+
 ## File Patterns
 
 ### PySpark Notebook

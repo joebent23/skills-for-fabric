@@ -51,6 +51,17 @@ rules:
   - name: kql_skills
     description: Authoring skill is eventhouse-authoring-cli, consumption skill is eventhouse-consumption-cli
     reference: skills/eventhouse-authoring-cli/SKILL.md
+
+  # CI/CD
+  - name: cicd_fabric_cicd
+    description: Use fabric-cicd Python library for code-first deployments from source control
+    reference: skills/cicd-authoring-cli/SKILL.md
+
+  - name: cicd_parameter_yml
+    description: Use parameter.yml for environment-specific GUID replacement in fabric-cicd deployments
+
+  - name: cicd_separate_workspaces
+    description: Use separate workspaces per environment (dev/test/prod) for CI/CD isolation
     
   # Security
   - name: no_hardcoded_secrets
@@ -78,6 +89,8 @@ documentation_links:
   kql: https://learn.microsoft.com/en-us/fabric/real-time-intelligence/create-database
   kql_query_reference: https://learn.microsoft.com/en-us/kusto/query/
   kusto_cli: https://learn.microsoft.com/en-us/kusto/tools/kusto-cli
+  cicd: https://learn.microsoft.com/en-us/fabric/cicd/cicd-overview
+  fabric_cicd_library: https://microsoft.github.io/fabric-cicd/latest/
   semantic_models: https://learn.microsoft.com/en-us/power-bi/connect-data/service-datasets-understand
   data_agents: https://learn.microsoft.com/en-us/fabric/data-science/concept-data-agent
   data_agent_evaluation: https://learn.microsoft.com/en-us/fabric/data-science/fabric-data-agent-sdk
