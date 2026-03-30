@@ -49,6 +49,151 @@ For deployment approach details, see the resources in this skill:
 
 ---
 
+## Pre-Flight Validation
+
+**Before attempting any CI/CD operation, run these checks in order.** Each check includes the exact command, what success looks like, and what failure means. Stop at the first failure and resolve it before continuing.
+
+### Check 1: Authentication
+
+Verify an active Azure session exists and can acquire a Fabric API token.
+
+```bash
+# Verify login session is active
+az account show --query "{user:user.name, tenant:tenantId}" -o table
+
+# Verify Fabric API token can be acquired
+az account get-access-token --resource https://api.fabric.microsoft.com --query "{expires:expiresOn}" -o table
+```
+
+| Result | Meaning | Fix |
+|---|---|---|
+| User and tenant displayed | Session active | Proceed |
+| `Please run 'az login'` | No active session | Run `az login` (interactive) or `az login --service-principal` (SPN) |
+| `AADSTS700016` | App registration not found | Check client ID is correct |
+| `AADSTS7000215` | Invalid client secret | Rotate secret in Entra ID, update Key Vault |
+
+> Ref: [COMMON-CLI.md § Authentication Recipes](../../common/COMMON-CLI.md#authentication-recipes)
+
+### Check 2: Fabric API Access
+
+Verify the current identity can reach the Fabric API and list workspaces.
+
+```bash
+az rest --method get \
+  --resource https://api.fabric.microsoft.com \
+  --url "https://api.fabric.microsoft.com/v1/workspaces?roles=Admin,Member,Contributor" \
+  --query "value | length(@)" -o tsv
+```
+
+| Result | Meaning | Fix |
+|---|---|---|
+| Number > 0 | Identity has workspace access | Proceed |
+| `0` | Identity has no workspace roles | Add identity to workspaces (see [Granting Workspace Access](#granting-workspace-access-programmatically)) |
+| `401 Unauthorized` | Token audience wrong or SPN not enabled | Check tenant setting "Service principals can use Fabric APIs" is enabled |
+| `403 Forbidden` | Identity lacks permissions | For SPNs: verify the SPN is in the tenant setting allowlist |
+
+### Check 3: Target Workspaces Exist and Have Capacity
+
+For each target workspace (dev, test, prod), verify it exists, the identity has a role, and capacity is assigned.
+
+```bash
+# Check workspace exists and has capacity
+az rest --method get \
+  --resource https://api.fabric.microsoft.com \
+  --url "https://api.fabric.microsoft.com/v1/workspaces" \
+  --query "value[?displayName=='<workspace-name>'].{name:displayName, id:id, capacity:capacityId}" -o table
+```
+
+| Result | Meaning | Fix |
+|---|---|---|
+| Row with name, id, and capacity GUID | Workspace exists with capacity | Proceed |
+| Empty result | Workspace doesn't exist OR identity has no role on it | Create workspace or add identity to it |
+| `capacityId` is null/empty | No capacity assigned | Assign capacity: `POST /v1/workspaces/{id}/assignToCapacity` |
+
+> **Capacity is required** for Lakehouse, Warehouse, Notebook execution, and most item creation. Without it, item creation fails with `FeatureNotAvailable`.
+
+### Check 4: Identity Role on Target Workspaces
+
+Verify the identity has sufficient permissions (Member or Admin) on each target workspace.
+
+```bash
+# List role assignments on the workspace
+az rest --method get \
+  --resource https://api.fabric.microsoft.com \
+  --url "https://api.fabric.microsoft.com/v1/workspaces/<workspaceId>/roleAssignments" \
+  --query "value[?principal.id=='<identity-object-id>'].{role:role, type:principal.type}" -o table
+```
+
+| Result | Meaning | Fix |
+|---|---|---|
+| `Member` or `Admin` | Sufficient for deployment | Proceed |
+| `Contributor` | Can deploy items but cannot manage Git connection | Sufficient for `fabric-cicd` deployments; upgrade to Admin if Git connection setup needed |
+| `Viewer` | Read-only — cannot deploy | Upgrade role to Member or Admin |
+| Empty result | Identity has no role | Add via `POST /v1/workspaces/{id}/roleAssignments` (see [Granting Workspace Access](#granting-workspace-access-programmatically)) |
+
+### Check 5: Available Capacity
+
+If workspaces need to be created, verify that capacity is available.
+
+```bash
+az rest --method get \
+  --resource https://api.fabric.microsoft.com \
+  --url "https://api.fabric.microsoft.com/v1/capacities" \
+  --query "value[?state=='Active'].{name:displayName, id:id, sku:sku, region:region}" -o table
+```
+
+| Result | Meaning | Fix |
+|---|---|---|
+| One or more active capacities | Can assign to workspaces | Proceed |
+| Empty result | No capacity available to this identity | Provision capacity via Azure portal or contact Fabric admin |
+
+### Check 6: Python and fabric-cicd (for fabric-cicd deployments)
+
+```bash
+python --version
+pip show fabric-cicd 2>/dev/null || echo "NOT INSTALLED"
+```
+
+| Result | Meaning | Fix |
+|---|---|---|
+| Python 3.9–3.13 + fabric-cicd version shown | Ready | Proceed |
+| Python 3.14+ | Not yet supported | Use `py -3.13` (Windows) or `pyenv` to select 3.9–3.13 |
+| `NOT INSTALLED` | Package missing | Run `pip install fabric-cicd` |
+
+### Check 7: Git Integration Status (if using Git-connected dev workspace)
+
+```bash
+az rest --method get \
+  --resource https://api.fabric.microsoft.com \
+  --url "https://api.fabric.microsoft.com/v1/workspaces/<devWorkspaceId>/git/status"
+```
+
+| Result | Meaning | Fix |
+|---|---|---|
+| JSON with `repositoryName`, `branchName` | Git connected | Proceed |
+| `404` or `GitConnectionNotFound` | Not connected to Git | Connect via `POST /v1/workspaces/{id}/git/connect` (see [Git Integration APIs](#git-integration-apis)) |
+| `WorkspaceNotConnectedToGit` | Connection dropped | Reconnect |
+
+### Check 8: Item Definitions Valid (for fabric-cicd deployments)
+
+Verify the local repository has the expected structure before deploying.
+
+```bash
+# Check that .platform files exist in item folders
+find ./fabric_items -name ".platform" -type f | head -5
+
+# Verify a .platform file is valid JSON
+cat ./fabric_items/MyNotebook.Notebook/.platform | python -m json.tool > /dev/null && echo "VALID" || echo "INVALID JSON"
+```
+
+| Result | Meaning | Fix |
+|---|---|---|
+| `.platform` files found and valid JSON | Items structured correctly | Proceed |
+| No `.platform` files | Items not in Fabric Git format | Bootstrap from existing workspace (see [local-deployment.md § Bootstrapping](resources/local-deployment.md#bootstrapping-from-an-existing-workspace)) |
+| Invalid JSON | Malformed metadata | Check for syntax errors, missing commas, or encoding issues |
+
+---
+
 ## CI/CD Decision Framework
 
 Help the user choose the right deployment approach based on their situation:
