@@ -45,6 +45,7 @@ For deployment approach details, see the resources in this skill:
 | GitHub Actions | [github-actions-deployment.md](resources/github-actions-deployment.md) | Teams using GitHub for source control and CI/CD |
 | Azure DevOps | [azure-devops-deployment.md](resources/azure-devops-deployment.md) | Teams using Azure DevOps for source control and CI/CD |
 | Fabric deployment pipelines | [deployment-pipelines.md](resources/deployment-pipelines.md) | Stage-to-stage promotion within Fabric |
+| Variable libraries | [variable-libraries.md](resources/variable-libraries.md) | Stage-aware configuration management (connections, item refs, parameters) |
 
 ---
 
@@ -305,17 +306,23 @@ When programmatic access is not possible (e.g., initial setup by a tenant admin)
 
 ### Variable Libraries
 
-Variable libraries provide stage-aware configuration for Fabric items. Use them when items need different values per environment (connection IDs, lakehouse references, parameters).
+Variable libraries provide stage-aware configuration for Fabric items. They are the **recommended Fabric-native approach** for managing environment-specific values, complementing or replacing `parameter.yml` GUID replacement.
 
-> Ref: https://learn.microsoft.com/fabric/cicd/variable-library/variable-library-overview
+> For comprehensive guidance including variable types, value sets, consumption patterns, Git integration, and REST APIs, see [variable-libraries.md](resources/variable-libraries.md).
+
+**When to use variable libraries vs parameter.yml:**
+- **Variable libraries**: Runtime configuration — values resolve when items execute, not at deploy time. Changes propagate immediately without redeployment. Best for connections, item references, and runtime parameters
+- **parameter.yml**: Deploy-time configuration — GUIDs replaced in definition files before upload. Best for IDs baked into item definitions (e.g., `%%configure` lakehouse IDs when not using variable library syntax)
+- **Both together**: Use variable libraries for runtime config and `parameter.yml` for any remaining deploy-time GUIDs
 
 **Key patterns:**
 - Define variables with value sets for each stage (dev/test/prod)
 - One value set is active per workspace — determines runtime values
-- Supported consumers: Pipelines, Notebooks (via NotebookUtils), Dataflows Gen2, Lakehouses (shortcuts), Copy Jobs, User Data Functions
-- Variable libraries are a supported `fabric-cicd` item type — they deploy alongside other items
-- Use connection reference variables for data source connections that differ per stage
-- Use item reference variables for lakehouse/warehouse references that differ per stage
+- After first deployment to a new workspace, set the correct active value set via API
+- Supported consumers: Pipelines (`@pipeline().libraryVariables`), Notebooks (`notebookutils.variableLibrary`), Dataflows Gen2, Lakehouses (shortcuts), Copy Jobs, User Data Functions
+- Variable libraries are a supported `fabric-cicd` item type — include `"VariableLibrary"` in `item_type_in_scope`
+- Use **item reference** variables for lakehouse/warehouse references that differ per stage
+- Use **connection reference** variables for external data connections that differ per stage
 
 ### Git Integration APIs
 

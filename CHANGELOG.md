@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - New `skills/cicd-authoring-cli/resources/github-actions-deployment.md` — GitHub Actions CI/CD patterns for Fabric
 - New `skills/cicd-authoring-cli/resources/azure-devops-deployment.md` — Azure DevOps CI/CD patterns for Fabric
 - New `skills/cicd-authoring-cli/resources/deployment-pipelines.md` — Fabric native deployment pipeline automation patterns
+- New `skills/cicd-authoring-cli/resources/variable-libraries.md` — Variable library patterns for stage-aware configuration (types, value sets, consumption, REST APIs)
 - New `skills/eventhouse-consumption-cli/` — Read-only KQL queries against Fabric Eventhouse and KQL Databases via `az rest`
 - New `skills/eventhouse-authoring-cli/` — KQL management commands (table management, ingestion, policies, materialized views, functions) via `az rest`
 - New `common/EVENTHOUSE-CONSUMPTION-CORE.md` — KQL query patterns, operators, data types, performance best practices
