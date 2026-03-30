@@ -358,6 +358,39 @@ After deploying items, common post-deployment tasks include:
 
 ---
 
+## Power BI Item Deployment
+
+Deploying SemanticModel and Report items requires extra care compared to Fabric-native items (Notebook, Lakehouse). Common pitfalls include definition format errors and identity attribution differences.
+
+**For comprehensive guidance** on creating and deploying semantic models (TMDL format, required files, minimal content, gotchas), see:
+- [powerbi-authoring-cli SKILL.md](../powerbi-authoring-cli/SKILL.md) — TMDL CRUD lifecycle, definition structure, authoring scope matrix
+- [ITEM-DEFINITIONS-CORE.md § SemanticModel](../../common/ITEM-DEFINITIONS-CORE.md#semanticmodel) — Required parts for TMSL and TMDL formats
+- [ITEM-DEFINITIONS-CORE.md § Report](../../common/ITEM-DEFINITIONS-CORE.md#report) — Required parts for PBIR and PBIR-Legacy formats
+
+**Key gotchas for CI/CD deployment of Power BI items:**
+
+- **`definition.pbism` must be minimal** — use `{"version":"1.0","settings":{}}` only. Additional properties like `enablePowerBiDataSourceApp` cause `Workload_FailedToParseFile` errors
+- **Report creation is not supported by `powerbi-authoring-cli`** — Reports use a separate PBIR definition format. For CI/CD, author reports in Power BI Desktop, commit to Git, and deploy via `fabric-cicd`
+- **Autobinding handles report-to-model references** — when promoting via deployment pipelines, reports automatically rebind to the paired semantic model in the target stage
+- **`fabric-cicd` resolves dependency ordering** — semantic models deploy before reports automatically
+
+---
+
+## Identity Best Practices
+
+When mixing `az login` (user identity) for local development and SPN for CI/CD automation, be aware of identity attribution differences:
+
+- **Fabric-native items** (Notebook, Lakehouse, DataPipeline): `createdBy` reflects the calling identity correctly
+- **Power BI items** (SemanticModel, Report): May show different ownership attribution depending on the deployment mechanism (direct API vs deployment pipeline internal behaviour)
+- **Deployment pipelines** may internally attribute Power BI items differently than the calling identity
+
+**Recommendations:**
+- Use a **single SPN identity** for all automated deployments to maintain consistent ownership attribution
+- Avoid mixing `az login` user deployments with SPN deployments to the same workspace
+- Verify item ownership post-deployment if governance requires clear attribution — use `POST /v1.0/myorg/admin/workspaces/getInfo` (Power BI Admin API) to inspect `createdBy` and `modifiedBy`
+
+---
+
 ## Examples
 
 ### Deploy Notebooks Locally with fabric-cicd
@@ -430,9 +463,13 @@ Not all Fabric items support Git integration and deployment equally. Before buil
 | `401 Unauthorized` on deployment | Wrong token audience or SPN not enabled | Use `https://api.fabric.microsoft.com/.default` scope; verify tenant setting |
 | `403 Forbidden` on workspace operations | SPN lacks workspace role | Add SPN as Member or Admin on workspace |
 | Items not deploying | Item type not in `item_type_in_scope` | Add the item type to scope list |
-| GUID replacement not working | `environment` param doesn't match `parameter.yml` keys | Ensure environment value matches a key in `replace_with` |
+| GUID replacement not working | `environment` param doesn't match `parameter.yml` keys | Ensure environment value matches a key in `replace_value` |
 | Deployment pipeline deploy fails | Items not paired or workspace not assigned | Verify stage assignment and item pairing |
 | Git sync conflict | Both workspace and repo have changes | Use `update-from-git` or `commit-to-git`; resolve conflicts first |
 | Variable library values wrong in target | Active value set not matching stage | Set the correct active value set per workspace |
+| `Workload_FailedToParseFile` for SemanticModel | `definition.pbism` contains unsupported properties | Strip to `{"version":"1.0","settings":{}}` — extra properties are rejected |
+| `WorkspaceMigrationOperationInProgress` (HTTP 400) | Concurrent deployment pipeline operations | Only one pipeline operation can run at a time; wait for current operation to complete before retrying |
+| `No matching distribution found` for fabric-cicd | Python version 3.14+ not yet supported | Use Python 3.9–3.13; on Windows use `py -3.13`, on Linux use `pyenv` to select a compatible version |
+| `createdBy` blank on Power BI items | Identity attribution differs by item type and deployment mechanism | Use a single SPN identity for all deployments; see [Identity Best Practices](#identity-best-practices) |
 
 > Ref: https://learn.microsoft.com/fabric/cicd/troubleshoot-cicd

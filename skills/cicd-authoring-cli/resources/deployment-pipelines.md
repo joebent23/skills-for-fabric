@@ -139,15 +139,59 @@ To deploy specific items only:
 
 ### Step 5: Poll for Completion
 
-The deploy call returns `202 Accepted` with `Location` and `x-ms-operation-id` headers. Poll:
+The deploy call returns `202 Accepted` with `Location` and `x-ms-operation-id` headers. Extract the operation ID and poll until complete.
+
+**Bash polling pattern:**
 
 ```bash
-az rest --method get \
-  --resource https://api.fabric.microsoft.com \
-  --url "https://api.fabric.microsoft.com/v1/operations/<operationId>"
+# Extract operation ID from the deploy response headers
+OPERATION_ID="<operation-id-from-response-header>"
+
+# Poll loop with backoff
+while true; do
+  RESULT=$(az rest --method get \
+    --resource https://api.fabric.microsoft.com \
+    --url "https://api.fabric.microsoft.com/v1/operations/$OPERATION_ID" \
+    -o json)
+
+  STATUS=$(echo "$RESULT" | jq -r '.status')
+  echo "Status: $STATUS"
+
+  if [ "$STATUS" = "Succeeded" ]; then
+    echo "Deployment complete"
+    break
+  elif [ "$STATUS" = "Failed" ]; then
+    echo "Deployment failed:"
+    echo "$RESULT" | jq '.error'
+    exit 1
+  fi
+
+  # Wait before polling again (honour Retry-After if available, default 10s)
+  sleep 10
+done
 ```
 
-Response includes `"status": "Running"`, `"Succeeded"`, or `"Failed"`. Honour `Retry-After` header.
+**PowerShell polling pattern:**
+
+```powershell
+$operationId = "<operation-id-from-response-header>"
+
+do {
+    $result = az rest --method get `
+        --resource https://api.fabric.microsoft.com `
+        --url "https://api.fabric.microsoft.com/v1/operations/$operationId" `
+        -o json | ConvertFrom-Json
+    Write-Host "Status: $($result.status)"
+
+    if ($result.status -eq "Failed") {
+        throw "Deployment failed: $($result.error | ConvertTo-Json)"
+    }
+    if ($result.status -ne "Succeeded") { Start-Sleep -Seconds 10 }
+} while ($result.status -ne "Succeeded")
+Write-Host "Deployment complete"
+```
+
+> **Concurrency constraint**: Only one deployment pipeline operation can run at a time per pipeline. If you get `WorkspaceMigrationOperationInProgress` (HTTP 400), wait for the current operation to finish before retrying. Always poll the previous operation to completion before starting the next stage promotion.
 
 ### Complete API Reference
 
