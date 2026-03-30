@@ -29,9 +29,8 @@ This resource covers automating Microsoft Fabric deployments using Azure DevOps 
 Same steps as described in [github-actions-deployment.md § Service Principal Setup](github-actions-deployment.md#service-principal-setup). The SPN must:
 
 1. Be created in Entra ID with a client secret
-2. Have API permissions granted (Power BI Service → Workspace.ReadWrite.All)
-3. Be enabled in Fabric tenant settings
-4. Be added as Member/Admin on each target workspace
+2. Be enabled in Fabric tenant settings ("Service principals can use Fabric APIs")
+3. Be added as Member/Admin on each target workspace
 
 ## Secret Management with Azure Key Vault
 

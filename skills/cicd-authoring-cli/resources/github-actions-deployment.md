@@ -25,11 +25,10 @@ Before any automated deployment works, the SPN must be configured:
 
 1. **Create Entra ID app registration** at https://entra.microsoft.com → App registrations
 2. **Create a client secret** under Certificates & secrets (note expiry — rotate before it expires)
-3. **Grant API permissions**: Under API permissions → Add → Power BI Service → select `Workspace.ReadWrite.All`, `Item.ReadWrite.All`. Grant admin consent
-4. **Enable tenant setting**: Fabric Admin Portal → Tenant Settings → Developer settings → "Service principals can use Fabric APIs" → Enable and add the SPN (or its security group) to the allowlist
-5. **Add SPN to workspaces**: In each target workspace (dev, test, prod) → Manage access → Add the SPN as **Member** or **Admin**
+3. **Enable tenant setting**: Fabric Admin Portal → Tenant Settings → Developer settings → "Service principals can use Fabric APIs" → Enable and add the SPN (or its security group) to the allowlist
+4. **Add SPN to workspaces**: In each target workspace (dev, test, prod) → Manage access → Add the SPN as **Member** or **Admin**
 
-Without steps 4 and 5, all API calls from the SPN will return `403 Forbidden`.
+Without steps 3 and 4, all API calls from the SPN will return `403 Forbidden`.
 
 ## Secrets Configuration
 
@@ -143,6 +142,7 @@ The deployment Python script should follow this structure. Guide the LLM to gene
 ```python
 import os
 import sys
+import json
 import requests
 from fabric_cicd import FabricWorkspace, publish_all_items, unpublish_all_orphan_items, change_log_level
 from azure.identity import ClientSecretCredential
@@ -173,7 +173,7 @@ def get_workspace_id(workspace_name, credential):
 workspace_id = get_workspace_id(os.environ["WORKSPACE_NAME"], credential)
 
 # Parse items in scope from environment variable
-items_in_scope = eval(os.environ.get("ITEMS_IN_SCOPE", "[]"))
+items_in_scope = json.loads(os.environ.get("ITEMS_IN_SCOPE", "[]"))
 
 # Initialize and deploy
 target = FabricWorkspace(
@@ -206,11 +206,11 @@ find_replace:
 
   - find_value: "66666666-7777-8888-9999-000000000000"     # DEV SQL endpoint GUID
     replace_value:
-      test: "$items.SQLEndpoint.MyLakehouse.$id"           # Resolves to test SQL endpoint ID
-      prod: "$items.SQLEndpoint.MyLakehouse.$id"           # Resolves to prod SQL endpoint ID
+      test: "$items.Lakehouse.MyLakehouse.$sqlendpointid"  # Resolves to test SQL endpoint ID
+      prod: "$items.Lakehouse.MyLakehouse.$sqlendpointid"  # Resolves to prod SQL endpoint ID
 ```
 
-**Token syntax**: `$items.<ItemType>.<ItemName>.$id` dynamically resolves to the matching item's GUID in the target workspace.
+**Token syntax**: `$items.<ItemType>.<ItemName>.$id` dynamically resolves to the matching item's GUID in the target workspace. Use `$sqlendpointid` instead of `$id` to resolve a lakehouse's SQL endpoint GUID.
 
 The `environment` parameter passed to `FabricWorkspace()` must match a key in `replace_value` (e.g., `test`, `prod`).
 

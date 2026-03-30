@@ -161,12 +161,12 @@ Place `parameter.yml` alongside item definitions in the repository. Define find/
 
 ```yaml
 find_replace:
-  - find: "dev-workspace-guid"
-    replace_with:
+  - find_value: "dev-workspace-guid"
+    replace_value:
       PPE: "test-workspace-guid"
       PROD: "prod-workspace-guid"
-  - find: "dev-lakehouse-guid"
-    replace_with:
+  - find_value: "dev-lakehouse-guid"
+    replace_value:
       PPE: "test-lakehouse-guid"
       PROD: "prod-lakehouse-guid"
 ```
@@ -227,7 +227,7 @@ Variable libraries provide stage-aware configuration for Fabric items. Use them 
 **Key patterns:**
 - Define variables with value sets for each stage (dev/test/prod)
 - One value set is active per workspace — determines runtime values
-- Supported consumers: Pipelines, Notebooks (via NotebookUtils), Dataflows Gen2, Lakehouses (shortcuts), Copy Jobs
+- Supported consumers: Pipelines, Notebooks (via NotebookUtils), Dataflows Gen2, Lakehouses (shortcuts), Copy Jobs, User Data Functions
 - Variable libraries are a supported `fabric-cicd` item type — they deploy alongside other items
 - Use connection reference variables for data source connections that differ per stage
 - Use item reference variables for lakehouse/warehouse references that differ per stage

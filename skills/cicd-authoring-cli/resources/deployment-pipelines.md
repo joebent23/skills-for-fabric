@@ -47,7 +47,7 @@ Deployment rules change configuration between stages. Configure these per target
 |---|---|---|
 | **Data source** | Changes semantic model data source connection | Dev SQL → Prod SQL server |
 | **Parameter** | Sets different parameter values per stage | `env=dev` → `env=prod` |
-| **Connection** | Changes item connection targets | Dev lakehouse → Prod lakehouse |
+| **Default lakehouse** | Sets the default lakehouse for notebooks | Dev lakehouse → Prod lakehouse |
 
 > Ref: https://learn.microsoft.com/fabric/cicd/deployment-pipelines/create-rules
 
@@ -65,7 +65,12 @@ az rest --method post \
   --url "https://api.fabric.microsoft.com/v1/deploymentPipelines" \
   --body '{
     "displayName": "MyProject Pipeline",
-    "description": "Dev to Test to Prod promotion"
+    "description": "Dev to Test to Prod promotion",
+    "stages": [
+      { "displayName": "Development", "order": 0 },
+      { "displayName": "Test", "order": 1 },
+      { "displayName": "Production", "order": 2 }
+    ]
   }'
 ```
 
