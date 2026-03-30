@@ -13,68 +13,213 @@ This resource covers automating Microsoft Fabric deployments using GitHub Action
 
 ## Prerequisites
 
-- GitHub repository with Fabric item definitions
-- Service principal (SPN) with Fabric API access enabled
-- SPN added as Member or Admin on target Fabric workspaces
-- GitHub Secrets configured for SPN credentials
-- Python 3.9+ available in GitHub Actions runner
+- GitHub repository containing Fabric item definitions in Git source format
+- Service principal (SPN) with Fabric API access enabled (see [SPN Setup](#service-principal-setup))
+- SPN added as Member or Admin on each target Fabric workspace
+- GitHub repository secrets or environment secrets configured
+- Dev workspace connected to the `dev` branch via Fabric Git integration
 
-## Workflow Principles
+## Service Principal Setup
 
-### Secret Management
+Before any automated deployment works, the SPN must be configured:
 
-Store SPN credentials as GitHub repository or environment secrets:
+1. **Create Entra ID app registration** at https://entra.microsoft.com → App registrations
+2. **Create a client secret** under Certificates & secrets (note expiry — rotate before it expires)
+3. **Grant API permissions**: Under API permissions → Add → Power BI Service → select `Workspace.ReadWrite.All`, `Item.ReadWrite.All`. Grant admin consent
+4. **Enable tenant setting**: Fabric Admin Portal → Tenant Settings → Developer settings → "Service principals can use Fabric APIs" → Enable and add the SPN (or its security group) to the allowlist
+5. **Add SPN to workspaces**: In each target workspace (dev, test, prod) → Manage access → Add the SPN as **Member** or **Admin**
 
-| Secret Name | Purpose |
+Without steps 4 and 5, all API calls from the SPN will return `403 Forbidden`.
+
+## Secrets Configuration
+
+### Repository-Level Secrets
+
+For simple setups, add secrets at Settings → Secrets and variables → Actions → New repository secret:
+
+| Secret Name | Value | Source |
+|---|---|---|
+| `AZURE_TENANT_ID` | Entra ID tenant GUID | Azure portal → Entra ID → Overview |
+| `AZURE_CLIENT_ID` | SPN application (client) ID | App registration → Overview |
+| `AZURE_CLIENT_SECRET` | SPN client secret value | App registration → Certificates & secrets |
+
+### Environment-Level Secrets (Recommended for Production)
+
+For gated deployments, create **GitHub Environments** at Settings → Environments:
+
+| Environment | Protection Rules | Secrets |
+|---|---|---|
+| `dev` | None (auto-deploy) | `WORKSPACE_NAME` = `myproject-dev` |
+| `test` | Required reviewers | `WORKSPACE_NAME` = `myproject-test` |
+| `prod` | Required reviewers + wait timer | `WORKSPACE_NAME` = `myproject-prod` |
+
+Add the SPN secrets (`AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`) at the repository level. Add the workspace-specific `WORKSPACE_NAME` at each environment level.
+
+## Branch Strategy
+
+### Recommended: Branch-per-stage with PR promotion
+
+```text
+dev branch ──[PR]──► test branch ──[PR]──► main/prod branch
+     │                    │                      │
+     ▼                    ▼                      ▼
+ Dev Workspace       Test Workspace        Prod Workspace
+ (Git-connected)     (fabric-cicd)         (fabric-cicd)
+```
+
+- **`dev` branch**: Connected to dev workspace via Fabric Git integration. Developers commit changes here.
+- **`test` branch**: NOT connected to a workspace. Receives promoted items via PR merge. Pipeline deploys to test workspace using `fabric-cicd`.
+- **`main`/`prod` branch**: NOT connected to a workspace. Receives promoted items via PR from test. Pipeline deploys to prod workspace.
+
+Only `dev` is Git-connected because `fabric-cicd` handles deployment to test/prod via REST APIs.
+
+### Alternative: Trunk-based with environment parameter
+
+Single `main` branch. The workflow takes `environment` as a parameter. `parameter.yml` handles GUID replacement. Simpler branching but requires manual trigger or dispatch event for per-environment control.
+
+## Workflow YAML Pattern
+
+Guide the LLM to generate a workflow following this structure:
+
+```yaml
+name: Deploy Fabric Items
+
+on:
+  push:
+    branches: [test, prod]
+    paths:
+      - 'fabric/**'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        type: choice
+        options: [test, prod]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment || (github.ref_name == 'test' && 'test') || (github.ref_name == 'prod' && 'prod') }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install fabric-cicd
+        run: pip install fabric-cicd azure-identity
+
+      - name: Deploy to Fabric workspace
+        env:
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          WORKSPACE_NAME: ${{ vars.WORKSPACE_NAME }}
+          TARGET_ENV: ${{ github.ref_name }}
+          ITEMS_IN_SCOPE: '["Notebook","DataPipeline","Lakehouse","SemanticModel","Report","Environment"]'
+          REPOSITORY_DIRECTORY: 'fabric'
+        run: python .deploy/deploy-to-fabric.py
+```
+
+### Key elements explained
+
+| Element | Purpose |
 |---|---|
-| `AZURE_TENANT_ID` | Entra ID tenant identifier |
-| `AZURE_CLIENT_ID` | SPN application (client) ID |
-| `AZURE_CLIENT_SECRET` | SPN client secret value |
+| `paths: ['fabric/**']` | Only trigger when Fabric item files change |
+| `environment:` | Maps to GitHub Environment — gates deployment with approval rules |
+| `workflow_dispatch` | Allows manual triggering with environment selection |
+| `actions/checkout@v4` | Clones repo so `fabric-cicd` can read item definitions |
+| `actions/setup-python@v5` | Installs Python on runner (stateless — must install every run) |
 
-For production deployments, prefer **GitHub Environments** with protection rules (required reviewers, wait timer) over plain repository secrets.
+## Deployment Script Pattern
 
-### Branch Strategy
+The deployment Python script should follow this structure. Guide the LLM to generate it with these components:
 
-Guide the LLM to set up branch-based deployment triggers:
+```python
+import os
+import sys
+import requests
+from fabric_cicd import FabricWorkspace, publish_all_items, unpublish_all_orphan_items, change_log_level
+from azure.identity import ClientSecretCredential
 
-- **Trunk-based** (recommended with `fabric-cicd`): Single main branch, environment determined by pipeline parameter, `parameter.yml` handles GUID replacement
-- **Branch-per-stage**: Separate branches (dev/test/prod), merge triggers deployment to the corresponding workspace
-- Use **path filters** to trigger only when Fabric item files change (e.g., `fabric_items/**`)
+# Enable verbose logging for troubleshooting
+change_log_level("DEBUG")
 
-### Workflow Structure Principles
+# Authenticate with SPN
+credential = ClientSecretCredential(
+    tenant_id=os.environ["AZURE_TENANT_ID"],
+    client_id=os.environ["AZURE_CLIENT_ID"],
+    client_secret=os.environ["AZURE_CLIENT_SECRET"],
+)
 
-A GitHub Actions workflow for Fabric CI/CD should follow this pattern:
+# Resolve workspace ID by display name (do not hardcode GUIDs)
+def get_workspace_id(workspace_name, credential):
+    token = credential.get_token("https://api.fabric.microsoft.com/.default")
+    response = requests.get(
+        "https://api.fabric.microsoft.com/v1/workspaces",
+        headers={"Authorization": f"Bearer {token.token}"},
+    )
+    response.raise_for_status()
+    for ws in response.json()["value"]:
+        if ws["displayName"] == workspace_name:
+            return ws["id"]
+    raise ValueError(f"Workspace '{workspace_name}' not found")
 
-1. **Trigger**: On push/merge to target branch (with path filter for item definition folders)
-2. **Setup**: Install Python and `fabric-cicd` package
-3. **Authenticate**: Create `ClientSecretCredential` from GitHub Secrets
-4. **Resolve workspace**: Look up workspace ID by name via Fabric REST API
-5. **Deploy**: Call `publish_all_items()` with the target workspace and environment
-6. **Clean up** (optional): Call `unpublish_all_orphan_items()` to remove stale items
-7. **Post-deploy** (optional): Trigger data refreshes, run validation tests
+workspace_id = get_workspace_id(os.environ["WORKSPACE_NAME"], credential)
 
-### Approval Gates
+# Parse items in scope from environment variable
+items_in_scope = eval(os.environ.get("ITEMS_IN_SCOPE", "[]"))
 
-Use GitHub Environments with protection rules for production deployments:
+# Initialize and deploy
+target = FabricWorkspace(
+    workspace_id=workspace_id,
+    environment=os.environ.get("TARGET_ENV", ""),
+    repository_directory=os.environ.get("REPOSITORY_DIRECTORY", "."),
+    item_type_in_scope=items_in_scope,
+    token_credential=credential,
+)
 
-- Create environments named `dev`, `test`, `prod` in repository settings
-- Add required reviewers to `test` and `prod` environments
-- Reference the environment in the workflow job to gate deployment
+publish_all_items(target)
+unpublish_all_orphan_items(target)  # Caution: removes items not in source
+```
 
-### Multi-Environment Pattern
+## GUID Replacement with parameter.yml
 
-For promoting across environments in a single workflow:
+When items contain environment-specific GUIDs (workspace IDs, lakehouse IDs, SQL endpoint IDs), create a `parameter.yml` file in the repository root or `.deploy/` directory:
 
-- Use a **matrix strategy** or **reusable workflows** to deploy to multiple workspaces
-- Pass `environment` as an input parameter that maps to `parameter.yml` keys
-- Use environment-specific workspace name variables
+```yaml
+find_replace:
+  - find_value: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"   # DEV workspace ID
+    replace_value:
+      test: "$workspace.$id"                               # Auto-resolves to test workspace ID
+      prod: "$workspace.$id"                               # Auto-resolves to prod workspace ID
+
+  - find_value: "11111111-2222-3333-4444-555555555555"     # DEV lakehouse GUID
+    replace_value:
+      test: "$items.Lakehouse.MyLakehouse.$id"             # Resolves to test lakehouse ID
+      prod: "$items.Lakehouse.MyLakehouse.$id"             # Resolves to prod lakehouse ID
+
+  - find_value: "66666666-7777-8888-9999-000000000000"     # DEV SQL endpoint GUID
+    replace_value:
+      test: "$items.SQLEndpoint.MyLakehouse.$id"           # Resolves to test SQL endpoint ID
+      prod: "$items.SQLEndpoint.MyLakehouse.$id"           # Resolves to prod SQL endpoint ID
+```
+
+**Token syntax**: `$items.<ItemType>.<ItemName>.$id` dynamically resolves to the matching item's GUID in the target workspace.
+
+The `environment` parameter passed to `FabricWorkspace()` must match a key in `replace_value` (e.g., `test`, `prod`).
 
 ## Considerations
 
-- GitHub Actions runners have no persistent state — install `fabric-cicd` in every run
-- Use `pip install fabric-cicd` in the setup step
-- SPN credentials must be rotated periodically — consider using Azure Key Vault with OIDC federation for keyless auth
-- GitHub has a 50 MB commit size limit for Fabric Git integration — large items may need to be split across commits
+- GitHub Actions runners are stateless — install `fabric-cicd` in every run
+- SPN credentials should be rotated before expiry. Consider OIDC federation (GitHub → Azure) for keyless auth
+- GitHub has a 50 MB commit size limit for Fabric Git integration
+- Path filters prevent unnecessary pipeline runs when non-Fabric files change
 - For GitHub Enterprise with custom domains, verify compatibility with Fabric Git integration
 
 > Ref: https://learn.microsoft.com/fabric/cicd/git-integration/intro-to-git-integration#github-limitations
