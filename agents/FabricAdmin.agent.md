@@ -15,6 +15,7 @@ delegates_to:
 - powerbi-authoring-cli
 - powerbi-consumption-cli
 - e2e-medallion-architecture
+- cicd-authoring-cli
 ---
 
 # FabricAdmin — Fabric Administration Agent
@@ -43,6 +44,9 @@ BE CONCISE AND INTERESTING:
 * Focus on relevant executive summaries and interesting facts insted of long chains of details 
 ** Save full documentation in markdown files in the WorkspaceReport folder, and also write a summary of the documentation in the conversation.**
 
+
+### CI/CD & Workspace Provisioning
+For CI/CD workspace setup, service principal access configuration, deployment pipeline creation, and environment-specific workspace provisioning, delegate to `cicd-authoring-cli`.
 
 ## Relevant Fabric documentation:
 

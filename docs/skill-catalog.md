@@ -8,7 +8,7 @@
   
   Or commit your changes - the pre-commit hook will regenerate this file.
   
-  Last generated: 2026-03-09 04:36 UTC
+  Last generated: 2026-03-31 09:37 UTC
 -->
 
 # Skill Catalog
@@ -27,6 +27,7 @@ This catalog lists all available skills-for-fabric with their purpose and trigge
 | Skill | Type | Purpose |
 |-------|------|---------|
 | [check-updates](#check-updates) | Utility | Check for skills-for-fabric marketplace updates at session s... |
+| [cicd-authoring-cli](#cicd-authoring-cli) | Authoring | Automate Microsoft Fabric CI/CD workflows using the fabric-c... |
 | [e2e-medallion-architecture](#e2e-medallion-architecture) | End-to-End | Implement end-to-end Medallion Architecture (Bronze/Silver/G... |
 | [eventhouse-authoring-cli](#eventhouse-authoring-cli) | Authoring | Execute KQL management commands (table management, ingestion... |
 | [eventhouse-consumption-cli](#eventhouse-consumption-cli) | Consumption | Run KQL queries against Fabric Eventhouse for real-time inte... |
@@ -46,6 +47,16 @@ This catalog lists all available skills-for-fabric with their purpose and trigge
 **Purpose:** Check for skills-for-fabric marketplace updates at session start. Compares local version  against GitHub releases and shows changelog if updates are available.
 
 **Location:** `skills/check-updates/`
+
+---
+
+## cicd-authoring-cli
+
+**Type:** Authoring
+
+**Purpose:** Automate Microsoft Fabric CI/CD workflows using the fabric-cicd Python library, Fabric REST APIs, Git integration, deployment pipelines, and variable libraries from CLI environments.
+
+**Location:** `skills/cicd-authoring-cli/`
 
 ---
 
@@ -145,7 +156,7 @@ This catalog lists all available skills-for-fabric with their purpose and trigge
 
 | Type | Skills |
 |------|--------|
-| Authoring | eventhouse-authoring-cli, powerbi-authoring-cli, spark-authoring-cli, sqldw-authoring-cli |
+| Authoring | cicd-authoring-cli, eventhouse-authoring-cli, powerbi-authoring-cli, spark-authoring-cli, sqldw-authoring-cli |
 | Consumption | eventhouse-consumption-cli, powerbi-consumption-cli, spark-consumption-cli, sqldw-consumption-cli |
 | End-to-End | e2e-medallion-architecture |
 | Utility | check-updates |
