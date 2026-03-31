@@ -289,6 +289,23 @@ All variable library APIs support service principals.
 
 > Ref: https://learn.microsoft.com/fabric/cicd/variable-library/automate-variable-library
 
+## Variable Libraries vs Secrets (Key Vault / GitHub Secrets)
+
+Variable libraries and secrets serve **different purposes** in CI/CD — they don't overlap:
+
+| Concern | Where it lives | Examples |
+|---|---|---|
+| **Deployment credentials** | GitHub Secrets / Azure Key Vault → ADO Variable Groups | SPN tenant ID, client ID, client secret |
+| **Deployment targets** | GH Environment variables / ADO non-sensitive variable group | Workspace names (`myproject-prod`) |
+| **Runtime configuration** | Variable library value sets (stored in Git + deployed to workspace) | SQL server URLs, lakehouse names, feature flags, connection IDs |
+| **Data source credentials** | Fabric connection objects (managed in Fabric, not in variable libraries) | SQL auth passwords, OAuth tokens for external sources |
+
+**Key points:**
+- Variable libraries store **configuration**, not credentials — values are visible in Git definition files
+- Connection reference variables store a Fabric **connection ID** (a GUID), not the actual connection credentials. The credentials live in the Fabric connection object itself
+- The SPN credentials used to **deploy** (from GH Secrets / Key Vault) are separate from the configuration values that **deployed items consume** (from variable libraries)
+- The post-deployment step to set the active value set uses the same SPN authentication (GH Secrets / Key Vault) as the deployment itself
+
 ## Integration with Each Deployment Approach
 
 ### Local Deployment (fabric-cicd)
