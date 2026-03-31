@@ -62,6 +62,8 @@ fabric_items/
 
 > ⚠️ **Notebook gotcha — silent blank deployment**: The FabricGitSource `.py` format (used by `notebook-content.py`) is whitespace-sensitive. Incorrect formatting causes notebooks to deploy successfully but appear **blank** in Fabric — no error is returned. Key rules: (1) blank line after `# Fabric notebook source` header, (2) blank line after every `# METADATA ********************` and `# CELL ********************` marker, (3) JSON in `# META` blocks must be multi-line (one key per `# META` line, not compact single-line). When in doubt, use `ipynb` format instead — it is more forgiving.
 
+> ⚠️ **Notebook gotcha — lakehouse binding for execution**: Notebooks that use `saveAsTable()` or `spark.read.table()` require three lakehouse fields in the `# META dependencies.lakehouse` block: `default_lakehouse` (lakehouse GUID), `default_lakehouse_name`, and `default_lakehouse_workspace_id` (workspace GUID). Having only `known_lakehouses[].id` is not sufficient — the notebook will deploy but fail at runtime. `fabric-cicd` resolves `known_lakehouses[].id` via `parameter.yml` but does **not** auto-populate the other two fields. Add all three GUIDs to your `parameter.yml` so they resolve per environment using `$items.Lakehouse.<Name>.$id` and `$workspace.$id`. See the [fabric-cicd sample notebook](https://github.com/microsoft/fabric-cicd/blob/main/sample/workspace/Example%20Notebook.Notebook/notebook-content.py) for the correct metadata structure.
+
 ### The .platform File
 
 Every item folder must contain a `.platform` file with item metadata:
