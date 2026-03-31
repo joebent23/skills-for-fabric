@@ -684,5 +684,7 @@ Not all Fabric items support Git integration and deployment equally. Before buil
 | `createdBy` blank on Power BI items | Identity attribution differs by item type and deployment mechanism | Use a single SPN identity for all deployments; see [Identity Best Practices](#identity-best-practices) |
 | `PyToIPynbFailure: prologue is invalid` | Notebook `.py` file doesn't start with required prologue | The first line of any `.py` notebook file MUST be exactly `# Fabric notebook source`. No comments, blank lines, or other content before it |
 | `ReferencedEntityAccessDenied` deploying variable library | SPN lacks read access to items/connections referenced in variable library | Ensure the SPN has at least read permission on all items and connections referenced in variable library item reference and connection reference variables |
+| `Alm_InvalidRequest_WorkloadUnavailable` on first deploy | Workload services not yet initialized after workspace assignment to pipeline | Wait 60–120s after workspace assignment, then retry. Deploy PBI items first, then Fabric-native items. Subsequent deploys work normally |
+| Lakehouse Tables API returns empty `data: []` | Spark-managed Delta tables not visible via REST API | Tables created by `saveAsTable()` may not surface in `GET .../lakehouses/{id}/tables`. Use notebook execution for data verification instead |
 
 > Ref: https://learn.microsoft.com/fabric/cicd/troubleshoot-cicd

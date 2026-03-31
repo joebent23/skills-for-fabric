@@ -192,8 +192,8 @@ import requests
 from fabric_cicd import FabricWorkspace, publish_all_items, unpublish_all_orphan_items, change_log_level, append_feature_flag
 from azure.identity import ClientSecretCredential
 
-# Optional feature flags
-append_feature_flag("enable_shortcut_publish")
+# Optional feature flags (enable only what you need)
+# append_feature_flag("enable_shortcut_publish")  # Only enable after initial deploy — first deploy fails if items don't exist yet
 change_log_level("DEBUG")
 
 # Parse pipeline arguments

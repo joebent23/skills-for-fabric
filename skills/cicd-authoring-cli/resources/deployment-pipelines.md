@@ -137,6 +137,8 @@ To deploy specific items only:
 }
 ```
 
+> **Field name mapping**: The GET stage items API (`GET .../stages/{stageId}/items`) returns `itemId` per item. When constructing the deploy request body, this value maps to the `sourceItemId` field.
+
 > **The `note` field is write-only** — it is accepted in deploy requests but NOT retrievable via the REST API. Notes are visible only in the Fabric portal's deployment pipeline UI. For programmatic audit trails, log deployment metadata externally (e.g., in Git commit messages or CI/CD pipeline logs).
 
 ### Step 5: Poll for Completion
@@ -248,5 +250,7 @@ This gives Git-based collaboration plus Fabric-native promotion with:
 - Workspace assignment returns **HTTP 200 with an empty body** on success — no confirmation payload is returned
 - A workspace can only be assigned to **one pipeline stage at a time**. Assigning a workspace that is already in another pipeline silently reassigns it
 - Use `GET /v1/deploymentPipelines/{id}/stages/{stageId}/items` to check `lastDeploymentTime` per item — this is the best way to verify what was deployed and when
+- **First deploy may fail with `Alm_InvalidRequest_WorkloadUnavailable`** — after assigning a workspace to a pipeline stage, workload services (Lakehouse, Notebook) need 60–120 seconds to initialize. If the first deploy fails, wait and retry. Alternatively, deploy PBI items (SemanticModel, Report) first, then Fabric-native items (Lakehouse, Notebooks) after a short delay. Subsequent deploys work reliably once workloads are initialized
+- Deploying a Lakehouse item automatically creates an associated **SQLEndpoint** in the target workspace — the target workspace will have one more item than the source if you count by API response
 
 > Ref: https://learn.microsoft.com/fabric/cicd/deployment-pipelines/understand-the-deployment-process
