@@ -54,61 +54,13 @@ fabric_items/
 
 > Ref: https://learn.microsoft.com/fabric/cicd/git-integration/source-code-format
 
-### FabricGitSource Notebook Format (Critical)
+**Item definition formats are strict.** Each item type has specific required files and format rules. Before creating item definitions manually, always check:
 
-The FabricGitSource `.py` format is **whitespace-sensitive**. Incorrect formatting causes notebooks to deploy successfully but appear **blank** in Fabric (only the header line is preserved — no code). This is a silent failure with no error message.
+1. **[ITEM-DEFINITIONS-CORE.md](../../common/ITEM-DEFINITIONS-CORE.md)** — Required parts, formats, and decoded content structure for each item type
+2. **[fabric-cicd sample repo](https://github.com/microsoft/fabric-cicd/tree/main/sample/workspace)** — Verified working item definitions that `fabric-cicd` is tested against. Use these as the reference format for any item type you need to deploy
+3. **Export from an existing workspace** — Connect a workspace to Git, commit items, and clone the repo to get Fabric-produced definitions in the correct format
 
-**Required format rules:**
-- Line 1 must be exactly `# Fabric notebook source`
-- A **blank line** must follow the header, every `# METADATA ********************` marker, and every `# CELL ********************` marker
-- JSON in `# META` blocks must use **multi-line format** (one key per `# META` line) — compact single-line JSON is silently rejected
-- No extra comment lines between `# Fabric notebook source` and the first `# METADATA` block
-- A **blank line** must appear before each `# METADATA` block (except the first one after the header)
-
-**Correct pattern:**
-
-```python
-# Fabric notebook source
-
-# METADATA ********************
-
-# META {
-# META   "kernel_info": {
-# META     "name": "synapse_pyspark"
-# META   },
-# META   "dependencies": {
-# META     "lakehouse": {
-# META       "known_lakehouses": [
-# META         {
-# META           "id": "<lakehouse-guid>"
-# META         }
-# META       ],
-# META       "default_lakehouse": "<lakehouse-guid>",
-# META       "default_lakehouse_name": "<lakehouse-name>",
-# META       "default_lakehouse_workspace_id": "<workspace-guid>"
-# META     }
-# META   }
-# META }
-
-# CELL ********************
-
-from pyspark.sql.types import StructType, StructField, StringType, IntegerType
-# your code here
-df = spark.createDataFrame(data, schema)
-df.write.mode("overwrite").saveAsTable("my_table")
-
-# METADATA ********************
-
-# META {
-# META   "language": "python",
-# META   "language_group": "synapse_pyspark"
-# META }
-```
-
-Each `# CELL` block contains the code for one notebook cell. Each cell must be followed by its own `# METADATA` block with at minimum `language` and `language_group`.
-
-> **Tip**: When in doubt, use `ipynb` format instead — it is more forgiving. Or export an existing notebook from a Git-connected workspace to see the exact format Fabric produces.
-> Ref: https://github.com/microsoft/fabric-cicd/tree/main/sample/workspace
+> ⚠️ **Notebook gotcha — silent blank deployment**: The FabricGitSource `.py` format (used by `notebook-content.py`) is whitespace-sensitive. Incorrect formatting causes notebooks to deploy successfully but appear **blank** in Fabric — no error is returned. Key rules: (1) blank line after `# Fabric notebook source` header, (2) blank line after every `# METADATA ********************` and `# CELL ********************` marker, (3) JSON in `# META` blocks must be multi-line (one key per `# META` line, not compact single-line). When in doubt, use `ipynb` format instead — it is more forgiving.
 
 ### The .platform File
 
