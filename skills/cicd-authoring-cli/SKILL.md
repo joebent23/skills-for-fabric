@@ -669,9 +669,7 @@ Not all Fabric items support Git integration and deployment equally. Before buil
 
 | Resource | What it contains |
 |---|---|
-| [fabric-cicd sample workspace](https://github.com/microsoft/fabric-cicd/tree/main/sample/workspace) | Verified item definitions for Notebook, Lakehouse, Environment — the format `fabric-cicd` is tested against |
-| [fabric-samples CI/CD (local)](https://github.com/microsoft/fabric-samples/tree/main/docs-samples/cicd/fabric-cicd-local) | Complete local deployment example with `deploy.py` and item definitions |
-| [fabric-samples CI/CD (ADO)](https://github.com/microsoft/fabric-samples/tree/main/docs-samples/cicd/fabric-cicd-devops/code) | Complete Azure DevOps pipeline example with YAML, deploy script, and `parameter.yml` |
+| [fabric-cicd sample workspace](https://github.com/microsoft/fabric-cicd/tree/main/sample/workspace) | Verified item definitions — the format `fabric-cicd` is tested against |
 | [ITEM-DEFINITIONS-CORE.md](../../common/ITEM-DEFINITIONS-CORE.md) | Required parts, formats, and decoded content for every supported item type |
 
 ---

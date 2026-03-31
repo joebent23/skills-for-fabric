@@ -250,3 +250,4 @@ az rest --method post --resource https://api.fabric.microsoft.com --url "https:/
 ```
 
 > Ref: https://microsoft.github.io/fabric-cicd/latest/
+> Complete working example: https://github.com/microsoft/fabric-samples/tree/main/docs-samples/cicd/fabric-cicd-local

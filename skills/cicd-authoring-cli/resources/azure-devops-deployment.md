@@ -282,3 +282,4 @@ Key tokens for replacement:
 - After creating a pipeline, you must authorize it to access variable groups, environments, and service endpoints. First-run may stall at "Authorization pending" until resources are authorized via the ADO portal
 
 > Ref: https://learn.microsoft.com/fabric/cicd/git-integration/intro-to-git-integration#azure-devops-limitations
+> Complete working example: https://github.com/microsoft/fabric-samples/tree/main/docs-samples/cicd/fabric-cicd-devops/code
