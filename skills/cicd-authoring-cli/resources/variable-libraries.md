@@ -293,23 +293,27 @@ All variable library APIs support service principals.
 
 ### Local Deployment (fabric-cicd)
 
-1. Author `variables.json` and value set files locally in the item folder
+1. Author `variables.json`, `settings.json`, and `valueSets/*.json` files locally in the item folder
 2. Deploy with `publish_all_items()` — the variable library is created/updated
-3. After deployment, set the active value set via REST API
+3. After first deployment, set the active value set via REST API (see [Setting Active Value Set via API](#setting-active-value-set-via-api))
 4. Consuming items (notebooks, pipelines) automatically pick up the active values
 
 ### GitHub Actions / Azure DevOps
 
 1. Variable library definition lives in Git alongside other items
 2. `fabric-cicd` deploys it as part of the standard deployment
-3. Add a **post-deployment step** to the workflow/pipeline that sets the active value set via REST API
-4. This only needs to be done on first deployment — subsequent deployments preserve the active selection
+3. Add a **post-deployment step** to the workflow/pipeline that:
+   - Resolves the variable library ID: `GET /v1/workspaces/{id}/variableLibraries` filtered by display name
+   - Sets the active value set: `PATCH /v1/workspaces/{id}/variableLibraries/{varLibId}` with `{"properties": {"activeValueSetName": "<env>"}}`
+4. Map the value set name to the target environment (e.g., `test` → `"Test"`, `prod` → `"Prod"`)
+5. This only needs to run on **first deployment** — subsequent deployments preserve the active selection. Include the step idempotently (it's a no-op if the correct set is already active)
 
 ### Deployment Pipelines
 
 1. Variable library deploys between stages automatically
 2. Active value set persists per stage — set once, preserved across deployments
-3. Use deployment pipeline comparison to see which variables differ between stages
+3. After first deployment to a new stage, set the active value set via API or Fabric portal UI
+4. Use deployment pipeline comparison to see which variables differ between stages
 
 ## Considerations and Limitations
 
