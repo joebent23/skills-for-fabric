@@ -54,6 +54,62 @@ fabric_items/
 
 > Ref: https://learn.microsoft.com/fabric/cicd/git-integration/source-code-format
 
+### FabricGitSource Notebook Format (Critical)
+
+The FabricGitSource `.py` format is **whitespace-sensitive**. Incorrect formatting causes notebooks to deploy successfully but appear **blank** in Fabric (only the header line is preserved — no code). This is a silent failure with no error message.
+
+**Required format rules:**
+- Line 1 must be exactly `# Fabric notebook source`
+- A **blank line** must follow the header, every `# METADATA ********************` marker, and every `# CELL ********************` marker
+- JSON in `# META` blocks must use **multi-line format** (one key per `# META` line) — compact single-line JSON is silently rejected
+- No extra comment lines between `# Fabric notebook source` and the first `# METADATA` block
+- A **blank line** must appear before each `# METADATA` block (except the first one after the header)
+
+**Correct pattern:**
+
+```python
+# Fabric notebook source
+
+# METADATA ********************
+
+# META {
+# META   "kernel_info": {
+# META     "name": "synapse_pyspark"
+# META   },
+# META   "dependencies": {
+# META     "lakehouse": {
+# META       "known_lakehouses": [
+# META         {
+# META           "id": "<lakehouse-guid>"
+# META         }
+# META       ],
+# META       "default_lakehouse": "<lakehouse-guid>",
+# META       "default_lakehouse_name": "<lakehouse-name>",
+# META       "default_lakehouse_workspace_id": "<workspace-guid>"
+# META     }
+# META   }
+# META }
+
+# CELL ********************
+
+from pyspark.sql.types import StructType, StructField, StringType, IntegerType
+# your code here
+df = spark.createDataFrame(data, schema)
+df.write.mode("overwrite").saveAsTable("my_table")
+
+# METADATA ********************
+
+# META {
+# META   "language": "python",
+# META   "language_group": "synapse_pyspark"
+# META }
+```
+
+Each `# CELL` block contains the code for one notebook cell. Each cell must be followed by its own `# METADATA` block with at minimum `language` and `language_group`.
+
+> **Tip**: When in doubt, use `ipynb` format instead — it is more forgiving. Or export an existing notebook from a Git-connected workspace to see the exact format Fabric produces.
+> Ref: https://github.com/microsoft/fabric-cicd/tree/main/sample/workspace
+
 ### The .platform File
 
 Every item folder must contain a `.platform` file with item metadata:
