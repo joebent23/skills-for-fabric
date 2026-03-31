@@ -338,14 +338,14 @@ Feature flags enable opt-in capabilities. Call `append_feature_flag("<flag>")` *
 
 | Flag | Purpose |
 |---|---|
-| `enable_shortcut_publish` | Deploy Lakehouse shortcuts alongside the Lakehouse item |
+| `enable_shortcut_publish` | Deploy Lakehouse shortcuts alongside the Lakehouse item. Safe to enable even if no shortcuts exist — the library silently skips if no `shortcuts.metadata.json` is found. Only enable when your Lakehouse definitions include shortcut metadata |
 | `enable_shortcut_exclude` | Allow `shortcut_exclude_regex` parameter (selective shortcut deployment) |
 | `enable_exclude_folder` | Allow `folder_path_exclude_regex` parameter (skip folders) |
 | `enable_include_folder` | Allow `folder_path_to_include` parameter (deploy only specific folders) |
 | `enable_items_to_include` | Allow `items_to_include` parameter (selective item deployment) |
 | `enable_experimental_features` | Required prerequisite for `enable_exclude_folder`, `enable_include_folder`, and `enable_items_to_include` |
 | `enable_environment_variable_replacement` | Use CI/CD pipeline variables for replacement instead of `parameter.yml` |
-| `continue_on_shortcut_failure` | Continue deployment if shortcuts fail to publish (instead of stopping) |
+| `continue_on_shortcut_failure` | Continue deployment if shortcuts fail to publish (instead of stopping). Useful when shortcut targets may not exist yet in the target workspace |
 
 **Operational flags:**
 
@@ -354,6 +354,10 @@ Feature flags enable opt-in capabilities. Call `append_feature_flag("<flag>")` *
 | `enable_response_collection` | Collect API responses — access via `workspace.responses` after deployment |
 | `disable_print_identity` | Suppress the executing identity name from log output |
 | `disable_workspace_folder_publish` | Skip deploying workspace subfolder structure |
+
+> **Feature flag guidance**: Only enable flags you actually need. Flags are additive — enabling a flag that isn't applicable (e.g., `enable_shortcut_publish` without shortcuts) is harmless but adds unnecessary processing. The data safety flags (`enable_*_unpublish`) should only be enabled when you explicitly want orphan cleanup to delete those item types.
+
+> **Known issue — Variable Library with Item/Connection References**: Deploying a variable library containing item reference or connection reference variables fails with `ReferencedEntityAccessDenied` if the deploying identity (SPN) does not have read access to the referenced item or connection. Ensure the SPN has at least read permission on all items and connections referenced in variable library values.
 
 #### Logging and Debugging
 
@@ -679,5 +683,6 @@ Not all Fabric items support Git integration and deployment equally. Before buil
 | `No matching distribution found` for fabric-cicd | Python version 3.14+ not yet supported | Use Python 3.9–3.13; on Windows use `py -3.13`, on Linux use `pyenv` to select a compatible version |
 | `createdBy` blank on Power BI items | Identity attribution differs by item type and deployment mechanism | Use a single SPN identity for all deployments; see [Identity Best Practices](#identity-best-practices) |
 | `PyToIPynbFailure: prologue is invalid` | Notebook `.py` file doesn't start with required prologue | The first line of any `.py` notebook file MUST be exactly `# Fabric notebook source`. No comments, blank lines, or other content before it |
+| `ReferencedEntityAccessDenied` deploying variable library | SPN lacks read access to items/connections referenced in variable library | Ensure the SPN has at least read permission on all items and connections referenced in variable library item reference and connection reference variables |
 
 > Ref: https://learn.microsoft.com/fabric/cicd/troubleshoot-cicd
