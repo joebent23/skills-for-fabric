@@ -153,55 +153,75 @@ MyVarLib.VariableLibrary/
 
 ```json
 {
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/variableLibrary/definition/variables/1.0.0/schema.json",
   "variables": [
     {
       "name": "LakehouseName",
+      "note": "",
       "type": "String",
-      "value": "sales-dev",
-      "note": "Target lakehouse for data ingestion"
+      "value": "sales-dev"
     },
     {
-      "name": "SourceLH",
-      "type": "ItemReference",
-      "value": {
-        "workspaceId": "aaaaaaaa-0000-1111-2222-bbbbbbbbbbbb",
-        "itemId": "00aa00aa-bb11-cc22-dd33-44ee44ee44ee"
-      },
-      "note": "Source lakehouse reference"
-    },
-    {
-      "name": "PrimaryDb",
-      "type": "connectionReference",
-      "value": {
-        "connectionId": "cccccccc-0000-1111-2222-dddddddddddd"
-      },
-      "note": "External database connection"
+      "name": "SQL_Server",
+      "note": "",
+      "type": "String",
+      "value": "contoso-dev.database.windows.net"
     }
   ]
 }
 ```
 
-### Value set file (e.g., Prod.json)
-
-Only includes variables that differ from the default:
+### settings.json structure
 
 ```json
 {
-  "variables": [
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/variableLibrary/definition/settings/1.0.0/schema.json",
+  "valueSetsOrder": [
+    "Test",
+    "Prod"
+  ]
+}
+```
+
+The `valueSetsOrder` array controls the display order of value sets.
+
+### Value set file (e.g., valueSets/Prod.json)
+
+Only includes variables that **differ** from the default. Uses `variableOverrides`, not `variables`:
+
+```json
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/variableLibrary/definition/valueSet/1.0.0/schema.json",
+  "name": "Prod",
+  "variableOverrides": [
     {
       "name": "LakehouseName",
       "value": "sales-prod"
     },
     {
-      "name": "SourceLH",
-      "value": {
-        "workspaceId": "bbbbbbbb-0000-1111-2222-cccccccccccc",
-        "itemId": "11bb11bb-cc22-dd33-ee44-55ff55ff55ff"
-      }
+      "name": "SQL_Server",
+      "value": "contoso-prod.database.windows.net"
     }
   ]
 }
 ```
+
+A value set with no overrides (uses all defaults):
+
+```json
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/variableLibrary/definition/valueSet/1.0.0/schema.json",
+  "name": "PPE",
+  "variableOverrides": []
+}
+```
+
+> Ref: Verified format from https://github.com/microsoft/fabric-cicd/tree/main/sample/workspace/Vars.VariableLibrary
+
+For advanced variable types (item reference, connection reference), see the MS Learn documentation:
+
+> Ref: https://learn.microsoft.com/fabric/cicd/variable-library/item-reference-variable-type
+> Ref: https://learn.microsoft.com/fabric/cicd/variable-library/connection-reference-variable-type
 
 ## Deploying Variable Libraries
 
