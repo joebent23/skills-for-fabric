@@ -1,6 +1,8 @@
 # Variable Libraries for CI/CD
 
-This resource covers using Fabric variable libraries to manage environment-specific configuration across deployment stages. Variable libraries are the recommended approach for centralised, stage-aware configuration management.
+This resource covers using Fabric variable libraries to manage environment-specific configuration across deployment stages. Variable libraries are **generally available (GA) as of September 2025** and are the **recommended approach** for centralised, stage-aware configuration management.
+
+> **Microsoft recommendation**: "It is recommended to leverage Variable Library whenever possible to manage environment-specific values, rather than relying solely on `find_replace` in parameter files." — [Microsoft Fabric CI/CD tutorial](https://learn.microsoft.com/fabric/cicd/tutorial-fabric-cicd-azure-devops)
 
 > Ref: https://learn.microsoft.com/fabric/cicd/variable-library/variable-library-overview
 
@@ -341,5 +343,43 @@ Variable libraries and secrets serve **different purposes** in CI/CD — they do
 - Connection reference variables also don't auto-bind — set the correct connection ID per stage
 - Changing a variable's type resets all values across value sets (breaking change for consumers)
 - Active value set selection is workspace state, not part of the definition — it's NOT stored in Git
+
+## Best Practices
+
+### Naming Conventions
+
+| Convention | Example | Rationale |
+|---|---|---|
+| Library name = purpose | `EnvConfig`, `DataConnections`, `LakehouseRefs` | One library per concern; easier to manage permissions |
+| Value set name = environment | `Dev` (default), `Test`, `Prod` | Matches the environment parameter in `fabric-cicd` |
+| Variable name = descriptive, PascalCase | `DefaultLakehouseId`, `SqlServerUrl`, `BatchSize` | Readable and consistent across consumers |
+| Prefix by item type for item refs | `LH_SalesId`, `WH_AnalyticsId` | Distinguishes different item type references |
+
+### Security
+
+- Variable libraries store **configuration, not credentials** — values are visible in Git definition files
+- Manage **write permissions** on variable libraries carefully — unauthorized users can modify variable values that affect dependent items
+- Connection reference variables store a Fabric **connection ID** (a GUID), not the actual connection credentials
+- Follow least-privilege access: only CI/CD service principals and workspace admins should have write access to variable libraries
+
+> Ref: https://learn.microsoft.com/fabric/cicd/variable-library/variable-library-permissions
+
+### Throttling Prevention in Notebooks
+
+- **Always assign variable values to local variables first** — avoid inline `notebookutils.variableLibrary.get()` in loops
+- If throttling occurs with multiple variable library requests, add wait statements to reduce concurrency
+- Place `%%configure` at the top of notebooks for early session setup
+
+### Migration from `parameter.yml` to Variable Libraries
+
+If you currently use `parameter.yml` for all GUID replacement and want to migrate to variable libraries:
+
+1. **Keep `parameter.yml`** for GUIDs that are baked into item definitions at deploy time and cannot use variable library syntax (rare edge cases)
+2. **Move runtime configuration** to variable libraries: server URLs, feature flags, batch sizes, connection IDs
+3. **Move lakehouse binding** from hardcoded GUIDs + `parameter.yml` to `%%configure` with variable library references
+4. **Move pipeline parameters** from hardcoded values to `@pipeline().libraryVariables`
+5. **Test incrementally** — migrate one variable type at a time and validate in the test environment before promoting
+
+> For detailed patterns on how each item type references variables, see [cross-item-references.md](cross-item-references.md).
 
 > Ref: https://learn.microsoft.com/fabric/cicd/variable-library/variable-library-cicd

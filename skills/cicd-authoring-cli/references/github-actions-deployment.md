@@ -219,6 +219,75 @@ find_replace:
 
 The `environment` parameter passed to `FabricWorkspace()` must match a key in `replace_value` (e.g., `test`, `prod`).
 
+## Approval Gates with GitHub Environments
+
+GitHub Environments provide approval gates, wait timers, and deployment protection rules for production deployments. This is the **recommended approach** for gating production deployments.
+
+### Setting Up Environments
+
+Create environments at Settings → Environments in the GitHub repository:
+
+| Environment | Protection Rules | Purpose |
+|---|---|---|
+| `dev` | None | Auto-deploy on merge to dev branch |
+| `test` | Required reviewers (1–2 people) | Pause for review before deploying to test |
+| `prod` | Required reviewers (2+ people) + wait timer (e.g., 15 min) | Gate production with review AND cooldown period |
+
+**Creating environments programmatically:**
+
+```bash
+# Create environment via GitHub CLI
+gh api --method PUT repos/{owner}/{repo}/environments/test
+gh api --method PUT repos/{owner}/{repo}/environments/prod
+
+# Set environment variables
+gh variable set WORKSPACE_NAME --env test --body "myproject-test"
+gh variable set WORKSPACE_NAME --env prod --body "myproject-prod"
+```
+
+> **Note**: Approval rules (required reviewers, wait timers) must be configured in the GitHub UI — there is no API to add reviewer requirements programmatically.
+
+### How Approval Works in the Workflow
+
+When the workflow YAML specifies `environment:`, GitHub automatically:
+
+1. Pauses the job before execution
+2. Notifies the configured reviewers
+3. Waits for approval (and any wait timer) before proceeding
+4. Logs the approval in the deployment history
+
+```yaml
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment || github.ref_name }}
+    # This line triggers approval gates for test/prod environments
+```
+
+### Branch Protection Rules
+
+For additional safety, configure branch protection on `test` and `prod` branches:
+
+1. Settings → Branches → Add branch protection rule
+2. Branch name pattern: `test` or `prod`
+3. Enable: "Require a pull request before merging"
+4. Enable: "Require approvals" (set minimum count)
+5. Enable: "Require status checks to pass before merging"
+
+This ensures no code reaches test/prod branches without review AND deployment requires environment approval.
+
+### OIDC Federation (Keyless Authentication)
+
+For higher security, replace client secrets with OIDC federation between GitHub and Azure:
+
+1. Configure a federated identity credential on the Entra ID app registration
+2. Set the subject claim to match your repository and environment
+3. Use `azure/login@v2` action with `client-id`, `tenant-id`, and `subscription-id` (no secret needed)
+
+> Ref: https://learn.microsoft.com/entra/workload-id/workload-identity-federation-create-trust
+
+This eliminates the need to store and rotate `AZURE_CLIENT_SECRET`.
+
 ## Considerations
 
 - GitHub Actions runners are stateless — install `fabric-cicd` in every run

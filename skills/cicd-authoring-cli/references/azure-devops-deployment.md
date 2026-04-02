@@ -269,6 +269,71 @@ Key tokens for replacement:
 - `$items.<ItemType>.<ItemName>.$id` — resolves to the named item's GUID in the target workspace
 - `$items.SQLEndpoint.<LakehouseName>.$id` — resolves to a lakehouse's SQL endpoint GUID
 
+## Approval Gates with ADO Environments
+
+Azure DevOps Environments provide approval checks, gates, and audit trails for deployment workflows. This is the **recommended approach** for gating production deployments.
+
+### Setting Up Environments with Approvals
+
+Create environments at Pipelines → Environments in the Azure DevOps project:
+
+| Environment | Approval Required | Setup |
+|---|---|---|
+| `dev` | No (auto-deploy) | Create environment, no checks needed |
+| `test` | Yes — add 1–2 approvers | Add "Approvals" check with required reviewers |
+| `prod` | Yes — add 2+ approvers + business hours | Add "Approvals" check with required reviewers; optionally add "Business Hours" check |
+
+**Adding approval checks:**
+
+1. Navigate to Pipelines → Environments → select the environment
+2. Click ⋮ → **Approvals and checks**
+3. Click **+ Add check** → **Approvals**
+4. Add the required approvers (users or groups)
+5. Optionally set "Allow approvers to approve their own runs" to No for stricter governance
+6. Save
+
+### How Approvals Work in the Pipeline
+
+When the pipeline YAML uses `environment: $(target_env)`, ADO automatically:
+
+1. Maps `$(target_env)` to the environment name (e.g., `test`, `prod`)
+2. Checks if the environment has approval requirements
+3. Pauses the pipeline and notifies approvers
+4. Waits for all required approvals before proceeding
+5. Logs the approval decision in the environment's deployment history
+
+```yaml
+# The deployment job type is REQUIRED for environments to work
+- deployment: Deployment
+  environment: $(target_env)  # Triggers approval for test/prod
+  strategy:
+    runOnce:
+      deploy:
+        steps: ...
+```
+
+> **Important**: Use `deployment:` (not `job:`) as the job type. Only deployment jobs support ADO Environments with approval gates.
+
+### Branch Policies
+
+For additional safety, configure branch policies on `test` and `prod` branches:
+
+1. Navigate to Repos → Branches → select branch → ⋮ → Branch policies
+2. Enable "Require a minimum number of reviewers" (set count to 2+)
+3. Enable "Check for linked work items" (optional — for traceability)
+4. Enable "Build validation" — add the deployment pipeline as a required build
+
+### Pipeline Authorization
+
+After creating a pipeline, it must be **authorized** to access variable groups, environments, and service connections. On the first run:
+
+1. The pipeline may stall at "Authorization pending"
+2. Click the "Authorize resources" button in the pipeline run UI
+3. Grant access to each required resource (variable groups, environments, service connections)
+4. Subsequent runs will not require re-authorization
+
+This is a one-time setup step per pipeline.
+
 ## Considerations
 
 - ADO Repos supports SPN-based Git connections for fully automated workflows

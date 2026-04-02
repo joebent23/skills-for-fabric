@@ -9,11 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - New `skills/cicd-authoring-cli/` — Automate Fabric CI/CD workflows using fabric-cicd Python library, Git integration, deployment pipelines, and variable libraries
-- New `skills/cicd-authoring-cli/resources/local-deployment.md` — Local development deployment patterns with fabric-cicd
-- New `skills/cicd-authoring-cli/resources/github-actions-deployment.md` — GitHub Actions CI/CD patterns for Fabric
-- New `skills/cicd-authoring-cli/resources/azure-devops-deployment.md` — Azure DevOps CI/CD patterns for Fabric
-- New `skills/cicd-authoring-cli/resources/deployment-pipelines.md` — Fabric native deployment pipeline automation patterns
-- New `skills/cicd-authoring-cli/resources/variable-libraries.md` — Variable library patterns for stage-aware configuration (types, value sets, consumption, REST APIs)
+- New `skills/cicd-authoring-cli/references/local-deployment.md` — Local development deployment patterns with fabric-cicd
+- New `skills/cicd-authoring-cli/references/github-actions-deployment.md` — GitHub Actions CI/CD patterns for Fabric
+- New `skills/cicd-authoring-cli/references/azure-devops-deployment.md` — Azure DevOps CI/CD patterns for Fabric
+- New `skills/cicd-authoring-cli/references/deployment-pipelines.md` — Fabric native deployment pipeline automation patterns
+- New `skills/cicd-authoring-cli/references/variable-libraries.md` — Variable library patterns for stage-aware configuration (types, value sets, consumption, REST APIs)
+- New `skills/cicd-authoring-cli/references/gotchas.md` — Critical deployment pitfalls by item type with post-deployment validation patterns
+- New `skills/cicd-authoring-cli/references/cross-item-references.md` — Cross-item reference patterns across environments (notebook→lakehouse, pipeline→notebook, report→semantic model)
 - New `skills/eventhouse-consumption-cli/` — Read-only KQL queries against Fabric Eventhouse and KQL Databases via `az rest`
 - New `skills/eventhouse-authoring-cli/` — KQL management commands (table management, ingestion, policies, materialized views, functions) via `az rest`
 - New `common/EVENTHOUSE-CONSUMPTION-CORE.md` — KQL query patterns, operators, data types, performance best practices
@@ -30,6 +32,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Hybrid architecture documentation updates describing Agents → Skills → Common layering and the skill-vs-agent decision framework.
 
 ### Changed
+- Updated `skills/cicd-authoring-cli/SKILL.md` with deployment guardrails (MUST NEVER rules), Standard Deployment Flow, enhanced CI/CD Decision Framework aligned to Microsoft's 4 official options, post-deployment validation tiers, expanded supported item types reference (25+ types), and TOC navigation table
+- Updated `skills/cicd-authoring-cli/references/github-actions-deployment.md` with approval gates guidance (GitHub Environments, branch protection, OIDC federation)
+- Updated `skills/cicd-authoring-cli/references/azure-devops-deployment.md` with approval gates guidance (ADO Environments, approval checks, branch policies, pipeline authorization)
+- Updated `skills/cicd-authoring-cli/references/variable-libraries.md` with GA status, Microsoft recommendation, naming conventions, security best practices, throttling prevention, and migration path from parameter.yml
 - Updated contributor and compatibility documentation to reflect agent-based orchestration in addition to skills.
 
 ## [0.1.6] - 2026-02-10
