@@ -27,7 +27,26 @@ description: >
 > 1. To find the workspace details (including its ID) from workspace name: list all workspaces and, then, use JMESPath filtering
 > 2. To find the item details (including its ID) from workspace ID, item type, and item name: list all items of that type in that workspace and, then, use JMESPath filtering
 
+> **MUST NEVER — Deployment Guardrails**
+> 1. **MUST NEVER** use raw REST API calls (`updateDefinition`, `createItemWithDefinition`) to deploy items to workspaces — **always** use the `fabric-cicd` Python library. Raw API calls bypass dependency ordering, skip GUID replacement, and can corrupt Git-connected workspace sync state.
+> 2. **MUST NEVER** deploy directly to a Git-connected workspace via API or `fabric-cicd` — the dev workspace should only receive changes via Git sync. Use `fabric-cicd` to deploy to non-Git-connected target workspaces (test, prod).
+> 3. **MUST NEVER** mix deployment approaches within a single workflow — choose one approach (fabric-cicd, deployment pipelines, or Git-based) and use it consistently throughout.
+> 4. **MUST ALWAYS** validate deployments after execution — a successful API response (HTTP 200) does NOT guarantee correct deployment. Items can deploy but be blank, misconfigured, or fail at runtime. See [Post-Deployment Validation](#post-deployment-validation) and [gotchas.md](references/gotchas.md).
+
 # CI/CD Authoring — CLI Skill
+
+| Topic | Section |
+|---|---|
+| Shared knowledge | [Prerequisite Knowledge](#prerequisite-knowledge) |
+| Deployment resources | [Deployment Approaches](#prerequisite-knowledge) |
+| Validation before deploy | [Pre-Flight Validation](#pre-flight-validation) |
+| Consistent workflow | [Standard Deployment Flow](#standard-deployment-flow) |
+| Choosing an approach | [CI/CD Decision Framework](#cicd-decision-framework) |
+| Guardrails | [Must/Prefer/Avoid](#mustpreferavoid) |
+| Library & parameterisation | [Core Concepts](#core-concepts) |
+| Known pitfalls | [Critical Gotchas Summary](#critical-gotchas-summary) |
+| After deployment | [Post-Deployment Operations](#post-deployment-operations) |
+| Item type matrix | [Supported Items Reference](#supported-items-reference) |
 
 ## Prerequisite Knowledge
 
@@ -41,11 +60,13 @@ For deployment approach details, see the resources in this skill:
 
 | Deployment Approach | Resource | When to Use |
 |---|---|---|
-| Local development | [local-deployment.md](resources/local-deployment.md) | Developer testing items locally before pushing |
-| GitHub Actions | [github-actions-deployment.md](resources/github-actions-deployment.md) | Teams using GitHub for source control and CI/CD |
-| Azure DevOps | [azure-devops-deployment.md](resources/azure-devops-deployment.md) | Teams using Azure DevOps for source control and CI/CD |
-| Fabric deployment pipelines | [deployment-pipelines.md](resources/deployment-pipelines.md) | Stage-to-stage promotion within Fabric |
-| Variable libraries | [variable-libraries.md](resources/variable-libraries.md) | Stage-aware configuration management (connections, item refs, parameters) |
+| Local development | [local-deployment.md](references/local-deployment.md) | Developer testing items locally before pushing |
+| GitHub Actions | [github-actions-deployment.md](references/github-actions-deployment.md) | Teams using GitHub for source control and CI/CD |
+| Azure DevOps | [azure-devops-deployment.md](references/azure-devops-deployment.md) | Teams using Azure DevOps for source control and CI/CD |
+| Fabric deployment pipelines | [deployment-pipelines.md](references/deployment-pipelines.md) | Stage-to-stage promotion within Fabric |
+| Variable libraries | [variable-libraries.md](references/variable-libraries.md) | Stage-aware configuration management (connections, item refs, parameters) |
+| Cross-item references | [cross-item-references.md](references/cross-item-references.md) | How items reference each other across environments (notebooks→lakehouses, pipelines→notebooks, etc.) |
+| **Critical gotchas** | **[gotchas.md](references/gotchas.md)** | **Known deployment pitfalls by item type — read before deploying** |
 
 ---
 
@@ -176,37 +197,113 @@ az rest --method get \
 
 ### Check 8: Item Definitions Valid (for fabric-cicd deployments)
 
-Verify the local repository has the expected structure before deploying.
-
-```bash
-# Check that .platform files exist in item folders
-find ./fabric_items -name ".platform" -type f | head -5
-
-# Verify a .platform file is valid JSON
-cat ./fabric_items/MyNotebook.Notebook/.platform | python -m json.tool > /dev/null && echo "VALID" || echo "INVALID JSON"
-```
+Verify the local repository has the expected structure: each item folder must contain a `.platform` file with valid JSON, and content files matching the item type. See [local-deployment.md § Repository Structure](references/local-deployment.md#step-2-set-up-repository-structure) for the required format and [gotchas.md](references/gotchas.md) for item-type-specific pitfalls.
 
 | Result | Meaning | Fix |
 |---|---|---|
 | `.platform` files found and valid JSON | Items structured correctly | Proceed |
-| No `.platform` files | Items not in Fabric Git format | Bootstrap from existing workspace (see [local-deployment.md § Bootstrapping](resources/local-deployment.md#bootstrapping-from-an-existing-workspace)) |
+| No `.platform` files | Items not in Fabric Git format | Bootstrap from existing workspace (see [local-deployment.md § Bootstrapping](references/local-deployment.md#bootstrapping-from-an-existing-workspace)) |
 | Invalid JSON | Malformed metadata | Check for syntax errors, missing commas, or encoding issues |
+
+---
+
+## Standard Deployment Flow
+
+**Every CI/CD setup MUST follow this workflow.** This ensures consistency regardless of which deployment approach is chosen. Do not deviate from this sequence.
+
+### Phase 1: Gather Requirements
+
+Before writing any code or configuration, ask the user:
+
+1. **Deployment approach**: Which approach fits their team? If unsure, guide them through the [CI/CD Decision Framework](#cicd-decision-framework) or point to the [official Microsoft decision guide](https://learn.microsoft.com/fabric/cicd/manage-deployment)
+2. **Item types in scope**: Which Fabric item types will be deployed? (Notebook, Lakehouse, DataPipeline, SemanticModel, Report, VariableLibrary, etc.)
+3. **Environments**: How many stages? (dev/test/prod or a subset)
+4. **Existing infrastructure**: Are workspaces already created? Is there a service principal? Is capacity assigned? For workspace provisioning, reference the FabricAdmin agent capabilities
+5. **Source control**: GitHub or Azure DevOps? Is the dev workspace already Git-connected?
+6. **Cross-item references**: Do items reference other items (notebooks → lakehouses, pipelines → notebooks, reports → semantic models)? This determines whether `parameter.yml`, variable libraries, or both are needed
+
+### Phase 2: Pre-Flight Validation
+
+Run all applicable [Pre-Flight Validation](#pre-flight-validation) checks. Stop at the first failure and resolve before proceeding.
+
+### Phase 3: Repository Structure
+
+Generate the repository structure with item definition folders following the [Fabric Git source format](https://learn.microsoft.com/fabric/cicd/git-integration/source-code-format). Include:
+
+- Item folders with `.platform` files and content files
+- `parameter.yml` if GUID replacement is needed
+- Variable library definitions if using variable libraries
+- Deployment script (`.deploy/deploy-to-fabric.py` or equivalent)
+- CI/CD pipeline YAML (if using GitHub Actions or Azure DevOps)
+
+### Phase 4: Configuration
+
+- Generate `parameter.yml` with find/replace pairs for all environment-specific GUIDs
+- Create variable library definitions with value sets for each environment
+- Configure CI/CD secrets (GitHub Secrets or Azure Key Vault → ADO Variable Groups)
+- Set up approval gates for test and production environments
+
+### Phase 5: Deploy
+
+Execute the deployment using the chosen approach. **Always use `fabric-cicd`** for deploying to non-Git-connected workspaces.
+
+### Phase 6: Validate
+
+Run post-deployment validation at minimum Tiers 1–3 (see [Post-Deployment Validation](#post-deployment-validation)):
+
+1. **Tier 1**: Verify items exist in target workspace
+2. **Tier 2**: Verify content is correct (especially notebooks — check for blank deployments)
+3. **Tier 3**: Run key notebooks/pipelines and verify execution succeeds
+4. **Tier 4** (optional): Verify data exists in lakehouses/warehouses
 
 ---
 
 ## CI/CD Decision Framework
 
-Help the user choose the right deployment approach based on their situation:
+If the user is unsure which deployment approach to use, guide them through the decision by asking qualifying questions about their team, tooling, and requirements. For comprehensive guidance, point them to the [official Microsoft CI/CD decision guide](https://learn.microsoft.com/fabric/cicd/manage-deployment).
 
-| Question | Option 1: Git-based (Gitflow) | Option 2: Git + Build env | Option 3: Deployment pipelines |
-|---|---|---|---|
-| **Source of truth** | Git repo (branch per stage) | Git repo (trunk-based) | Git for dev only; Fabric for promotion |
-| **Branching model** | Multiple primary branches (dev/test/prod) | Single main branch with release pipelines | Main branch, stage-to-stage deploy |
-| **Config management** | Post-deployment API calls | `parameter.yml` GUID replacement in build env | Deployment rules + autobinding |
-| **Key tool** | Fabric Git APIs | `fabric-cicd` Python library | Deployment pipeline APIs |
-| **Best for** | Teams wanting full Git control per stage | Teams needing env-specific GUID replacement | Teams preferring Fabric-native promotion |
+### Qualifying Questions
+
+Ask these questions to recommend an approach:
+
+| Question | If the answer is... | Recommend |
+|---|---|---|
+| Do you use GitHub or Azure DevOps for source control? | GitHub | Option 2 with GitHub Actions |
+| | Azure DevOps | Option 2 with Azure DevOps Pipelines |
+| | Neither / Fabric only | Option 3 (Deployment Pipelines) |
+| How many people are on your team? | Small team (1–3 analysts) | Option 3 — lightest weight, no external CI/CD tooling needed |
+| | Medium team (4–15 engineers) | Option 2 — `fabric-cicd` with GH Actions or ADO |
+| | Large org / enterprise | Option 2 with approval gates and Key Vault |
+| Do items need different GUIDs per environment? | Yes (lakehouse IDs, connections, etc.) | Option 2 with `parameter.yml` and/or variable libraries |
+| | No — same config everywhere | Option 1 or 3 (simpler) |
+| Do you need approval gates before production? | Yes | Option 2 with GH Environments or ADO Environments |
+| | No | Any option works |
+
+### Microsoft's Four Options
 
 > Ref: https://learn.microsoft.com/fabric/cicd/manage-deployment
+
+| Option | Name | Source of Truth | Key Tool | Best For |
+|---|---|---|---|---|
+| **1** | Git-based (Gitflow) | Git repo (branch per stage) | Fabric Git APIs | Teams wanting full Git control per stage |
+| **2** | Git + Build environment | Git repo (trunk-based) | `fabric-cicd` Python library | Teams needing env-specific GUID replacement — **most common for enterprise CI/CD** |
+| **3** | Deployment pipelines | Git for dev only; Fabric for promotion | Deployment pipeline APIs | Teams preferring Fabric-native promotion, smaller teams |
+| **4** | ISV multi-tenant | Git repo (trunk-based) | `fabric-cicd` + per-customer config | ISVs with separate workspaces per customer |
+
+### How this skill's resources map to Microsoft's options
+
+| This skill's resource | Covers MS Option(s) | Notes |
+|---|---|---|
+| [local-deployment.md](references/local-deployment.md) | Option 2 (local) | Developer testing with `fabric-cicd` before pushing |
+| [github-actions-deployment.md](references/github-actions-deployment.md) | Option 2 (GH Actions) | Automated `fabric-cicd` deployment via GitHub |
+| [azure-devops-deployment.md](references/azure-devops-deployment.md) | Option 2 (ADO) | Automated `fabric-cicd` deployment via Azure DevOps |
+| [deployment-pipelines.md](references/deployment-pipelines.md) | Option 3 | Fabric-native stage-to-stage promotion |
+
+> **Option 1 (pure Gitflow)** is a variant of Option 2 where each stage has its own primary branch connected to a workspace via Fabric Git APIs. The same `fabric-cicd` tooling applies — see the branch strategy sections in the GitHub Actions and Azure DevOps resources.
+
+> **Option 4 (ISV multi-tenant)** is a variant of Option 2 with per-customer workspaces and parallel deployments. This skill's patterns apply but the orchestration layer (deploying to hundreds of workspaces) is out of scope.
+
+> **Bulk Import Item Definitions API (beta)**: Microsoft also offers a [Bulk Import API](https://learn.microsoft.com/rest/api/fabric/core/items/bulk-import-item-definitions(beta)) as an alternative to `fabric-cicd` for Option 2. It sends all item definition files in a single REST call and relies on Fabric's server-side dependency handling. It is simpler (no Python library needed), but it is currently in **beta**, does not support `parameter.yml` GUID replacement, and does not provide orphan cleanup. This skill recommends `fabric-cicd` over the Bulk Import API for production CI/CD. See the [Bulk Import tutorial](https://learn.microsoft.com/fabric/cicd/tutorial-bulkapi-cicd) for details.
 
 ### When to use `fabric-cicd` (Options 1 & 2)
 
@@ -231,6 +328,8 @@ Prefer deployment pipelines when:
 
 ### MUST DO
 
+- **Always use `fabric-cicd`** for deploying items to non-Git-connected workspaces — never use raw REST API `updateDefinition` or `createItemWithDefinition`
+- **Always validate deployments** — run at least Tier 1–3 post-deployment validation checks (see [Post-Deployment Validation](#post-deployment-validation))
 - **Authenticate with service principal** for unattended CI/CD — use `ClientSecretCredential` from `azure-identity` or `az login --service-principal`
 - **Enable tenant admin setting** "Service principals can use Fabric APIs" before SPN-based automation works
 - **Add SPN as Member or Admin** on each target Fabric workspace
@@ -240,10 +339,10 @@ Prefer deployment pipelines when:
 - **Test deployments in a dev/test workspace** before promoting to production
 - **Resolve workspace ID by name dynamically** via REST API — do not hardcode workspace GUIDs
 - **Use variable libraries** for stage-aware configuration when items consume workspace-specific settings (connections, item references, parameters)
+- **Read [gotchas.md](references/gotchas.md)** before deploying any item type — it contains critical pitfalls that cause silent failures
 
 ### PREFER
 
-- `fabric-cicd` Python library over raw REST API calls — it handles dependency ordering, definition upload, and orphan cleanup
 - Trunk-based branching with `parameter.yml` for GUID replacement over branch-per-stage workflows
 - Separate workspaces per environment (dev/test/prod) for isolation and independent permissions
 - Small, frequent deployments over large batch releases
@@ -435,9 +534,11 @@ Workspace naming convention: `{project}-{env}` (e.g., `sales-analytics-dev`, `sa
 
 This is a critical CI/CD prerequisite — if the SPN lacks workspace access, all deployments fail with `403 Forbidden`.
 
+For the workspace role assignment API patterns, see [COMMON-CORE.md § Workspace Role Assignment](../../common/COMMON-CORE.md#workspace-role-assignment). The CI/CD-specific steps are:
+
 **Step 1: Find the SPN's object ID**
 
-The role assignment API requires the SPN's **object ID** (also called the enterprise application / service principal object ID), NOT the application (client) ID.
+The role assignment API requires the SPN's **object ID** (the enterprise application / service principal object ID), NOT the application (client) ID.
 
 ```bash
 # Find the SPN object ID from the application (client) ID
@@ -448,63 +549,19 @@ az rest --method get \
 
 Alternatively, find it in the Azure portal: Entra ID → Enterprise applications → search by app name → copy the **Object ID**.
 
-**Step 2: Add the SPN to the workspace**
+**Step 2: Add the SPN to each target workspace**
+
+Use the role assignment API from [COMMON-CORE.md](../../common/COMMON-CORE.md#workspace-role-assignment) with `"type": "ServicePrincipal"` and role `"Member"` or `"Admin"`. Add the SPN to every target workspace (dev, test, prod).
+
+**Step 3: Verify access**
 
 ```bash
-# Grant SPN "Member" role on the workspace
-az rest --method post \
-  --resource https://api.fabric.microsoft.com \
-  --url "https://api.fabric.microsoft.com/v1/workspaces/<workspaceId>/roleAssignments" \
-  --body '{
-    "principal": {
-      "id": "<spn-object-id>",
-      "type": "ServicePrincipal"
-    },
-    "role": "Member"
-  }'
-```
-
-Available roles: `Admin`, `Member`, `Contributor`, `Viewer`. For CI/CD deployments, use **Member** (can create and modify items) or **Admin** (full control including workspace settings and Git connection).
-
-**Step 3: Add users or groups**
-
-```bash
-# Grant a user "Contributor" role
-az rest --method post \
-  --resource https://api.fabric.microsoft.com \
-  --url "https://api.fabric.microsoft.com/v1/workspaces/<workspaceId>/roleAssignments" \
-  --body '{
-    "principal": {
-      "id": "<user-or-group-object-id>",
-      "type": "User"
-    },
-    "role": "Contributor"
-  }'
-```
-
-For groups, use `"type": "Group"` with the Entra security group's object ID.
-
-**Step 4: Verify access**
-
-```bash
-# List current role assignments on a workspace
 az rest --method get \
   --resource https://api.fabric.microsoft.com \
   --url "https://api.fabric.microsoft.com/v1/workspaces/<workspaceId>/roleAssignments"
 ```
 
-### Granting Access via Fabric UI (Manual Fallback)
-
-When programmatic access is not possible (e.g., initial setup by a tenant admin):
-
-1. Open the Fabric portal → navigate to the workspace
-2. Click **Manage access** (gear icon or "..." menu → Manage access)
-3. Click **Add people or groups**
-4. Search for the SPN by its app registration display name
-5. Select the role: **Member** (recommended for CI/CD) or **Admin**
-6. Click **Add**
-
-> **Note**: The SPN only appears in the search if "Service principals can use Fabric APIs" is enabled in tenant settings.
+> **Note**: The SPN only appears in Fabric portal search if "Service principals can use Fabric APIs" is enabled in tenant settings.
 
 ### Role Selection Guide for CI/CD
 
@@ -519,7 +576,7 @@ When programmatic access is not possible (e.g., initial setup by a tenant admin)
 
 Variable libraries provide stage-aware configuration for Fabric items. They are the **recommended Fabric-native approach** for managing environment-specific values, complementing or replacing `parameter.yml` GUID replacement.
 
-> For comprehensive guidance including variable types, value sets, consumption patterns, Git integration, and REST APIs, see [variable-libraries.md](resources/variable-libraries.md).
+> For comprehensive guidance including variable types, value sets, consumption patterns, Git integration, and REST APIs, see [variable-libraries.md](references/variable-libraries.md).
 
 **When to use variable libraries vs parameter.yml:**
 - **Variable libraries**: Runtime configuration — values resolve when items execute, not at deploy time. Changes propagate immediately without redeployment. Best for connections, item references, and runtime parameters
@@ -554,6 +611,21 @@ For automating Git operations on workspaces:
 
 ---
 
+## Critical Gotchas Summary
+
+These are the most dangerous deployment pitfalls — deployments that succeed (HTTP 200) but produce broken items. For full details and all item types, see [gotchas.md](references/gotchas.md).
+
+| Gotcha | Item Type | What Happens | Prevention |
+|---|---|---|---|
+| **Silent blank notebook** | Notebook | `.py` format deploys successfully but notebook appears blank in Fabric | Use `.ipynb` format, or follow strict whitespace rules in `.py` format. Always verify content size after deploy |
+| **Missing lakehouse binding** | Notebook | Notebook has content but `RunNotebook` fails with generic error | Ensure `default_lakehouse`, `default_lakehouse_name`, AND `default_lakehouse_workspace_id` are all present in metadata. Use `%%configure` with variable library (recommended) or `parameter.yml` |
+| **Minimal `definition.pbism`** | SemanticModel | Deploy fails with `Workload_FailedToParseFile` | Use exactly `{"version":"1.0","settings":{}}` — no extra properties |
+| **Raw REST API deployment** | All | Breaks Git sync, skips dependency ordering, no GUID replacement | ALWAYS use `fabric-cicd` library — NEVER `updateDefinition` API directly |
+| **First pipeline deploy fails** | Deployment Pipelines | `WorkloadUnavailable` after assigning workspaces to stages | Wait 60–120s after workspace assignment before first deploy |
+| **Variable library active set** | VariableLibrary | Deploys with default value set active — wrong config for target env | Set active value set via API after first deployment to each workspace |
+
+---
+
 ## Post-Deployment Operations
 
 After deploying items, common post-deployment tasks include:
@@ -562,10 +634,59 @@ After deploying items, common post-deployment tasks include:
 2. **Run notebooks** — trigger execution via `POST .../jobs/instances?jobType=RunNotebook`
 3. **Trigger pipelines** — run data pipelines via `POST .../jobs/instances?jobType=Pipeline`
 4. **Set data source credentials** — configure credentials for semantic models or other data items
-5. **Validate deployment** — check item existence, verify connections, run test queries
+5. **Validate deployment** — run post-deployment validation checks (see below)
 6. **Update Power BI apps** — app content is NOT automatically updated by deployment; use API to update
+7. **Set variable library active value set** — after first deployment to a new workspace, activate the correct value set via `PATCH /v1/workspaces/{id}/variableLibraries/{varLibId}`
 
 > Ref: [COMMON-CORE.md § Job Execution](../../common/COMMON-CORE.md#job-execution)
+
+### Post-Deployment Validation
+
+**A successful deployment response does NOT guarantee a correct deployment.** Items can deploy but be blank, misconfigured, or fail at runtime. Always validate at minimum Tiers 1–3 after every deployment.
+
+For comprehensive per-item-type gotchas, see [gotchas.md](references/gotchas.md).
+
+#### Tier 1 — Item Existence
+
+Verify all expected items exist in the target workspace:
+
+```bash
+az rest --method get \
+  --resource https://api.fabric.microsoft.com \
+  --url "https://api.fabric.microsoft.com/v1/workspaces/<workspaceId>/items" \
+  --query "value[].{name:displayName, type:type}" -o table
+```
+
+Compare the item list against the expected items from the repository. Flag any missing items.
+
+#### Tier 2 — Content Verification
+
+For **notebooks**: Retrieve the definition and verify the payload is not blank (a blank notebook is ~26 bytes — just `# Fabric notebook source`):
+
+```bash
+az rest --method post \
+  --resource https://api.fabric.microsoft.com \
+  --url "https://api.fabric.microsoft.com/v1/workspaces/<wsId>/items/<itemId>/getDefinition"
+```
+
+Decode the Base64 payload and check that actual cell content exists. Any notebook with real content should be significantly larger than 26 bytes.
+
+#### Tier 3 — Execution Verification
+
+Run key notebooks or pipelines to verify they execute successfully:
+
+```bash
+# Trigger notebook execution
+az rest --method post \
+  --resource https://api.fabric.microsoft.com \
+  --url "https://api.fabric.microsoft.com/v1/workspaces/<wsId>/items/<notebookId>/jobs/instances?jobType=RunNotebook"
+```
+
+Poll the returned operation until completion. A `Failed` result indicates configuration issues — typically missing lakehouse binding, missing connections, or incorrect variable library values.
+
+#### Tier 4 — Data Verification (Optional)
+
+For items that produce data (notebooks writing to lakehouses), verify data exists. **Do not rely on the Lakehouse Tables REST API** — it may return empty results for Spark-managed Delta tables. Instead, run a validation notebook that reads expected tables, checks row counts, and prints a pass/fail summary.
 
 ---
 
@@ -630,30 +751,13 @@ publish_all_items(workspace)
 
 ### Connect a Workspace to Git via REST API
 
-```bash
-az rest --method post \
-  --resource https://api.fabric.microsoft.com \
-  --url "https://api.fabric.microsoft.com/v1/workspaces/<workspaceId>/git/connect" \
-  --body '{
-    "gitProviderDetails": {
-      "organizationName": "<org>",
-      "projectName": "<project>",
-      "gitProviderType": "AzureDevOps",
-      "repositoryName": "<repo>",
-      "branchName": "main",
-      "directoryName": "/fabric_items"
-    }
-  }'
-```
+Use `POST /v1/workspaces/{id}/git/connect` with the `gitProviderDetails` body. See the [Git Integration APIs](#git-integration-apis) table for the full endpoint list and the [COMMON-CLI.md](../../common/COMMON-CLI.md) patterns for `az rest` body construction.
+
+> Ref: https://learn.microsoft.com/fabric/cicd/git-integration/git-automation
 
 ### Resolve Workspace ID by Name
 
-```bash
-az rest --method get \
-  --resource https://api.fabric.microsoft.com \
-  --url "https://api.fabric.microsoft.com/v1/workspaces" \
-  --query "value[?displayName=='my-workspace-dev'].id" -o tsv
-```
+> Ref: [COMMON-CLI.md § Workspace Lookup](../../common/COMMON-CLI.md) — use `az rest` with JMESPath filtering on `displayName`
 
 ---
 
@@ -671,6 +775,38 @@ Not all Fabric items support Git integration and deployment equally. Before buil
 |---|---|
 | [fabric-cicd sample workspace](https://github.com/microsoft/fabric-cicd/tree/main/sample/workspace) | Verified item definitions — the format `fabric-cicd` is tested against |
 | [ITEM-DEFINITIONS-CORE.md](../../common/ITEM-DEFINITIONS-CORE.md) | Required parts, formats, and decoded content for every supported item type |
+| [gotchas.md](references/gotchas.md) | Per-item-type deployment pitfalls and prevention guidance |
+| [cross-item-references.md](references/cross-item-references.md) | How items reference each other across environments |
+
+### Item Type Quick Reference
+
+Every item folder must contain a `.platform` file. The table below shows the main content files and cross-item references for each supported type:
+
+| Item Type | Content Files | Has Cross-Item References? | Key Gotcha |
+|---|---|---|---|
+| **ApacheAirflowJob** | `apacheairflowjob-content.json`, `dags/*.py` | May reference other items in DAGs | — |
+| **CopyJob** | `copyjob-content.json` | ✅ Source/destination lakehouses (`workspaceId`, `artifactId`) | Use variable library connection refs per environment |
+| **DataPipeline** | `pipeline-content.json`, `.schedules` | ✅ Notebook IDs, lakehouse IDs in activities | Replace activity `notebookId`/`workspaceId` via `parameter.yml` or variable library |
+| **Dataflow** | `mashup.pq`, `queryMetadata.json` | May reference connections | Power Query format |
+| **Environment** | `environment.yml`, `Sparkcompute.yml`, custom `.whl`/`.jar` files | Referenced by notebooks/jobs via environment ID | Custom libraries stored in `Libraries/` folder |
+| **Eventhouse** | `EventhouseProperties.json`, child KQL DB folders | ✅ Child KQL DBs reference parent via `parentEventhouseItemId` | Deploy parent before children |
+| **Eventstream** | `eventstream.json`, `eventstreamProperties.json` | ✅ Sources/destinations reference other items (`workspaceId`, `itemId`) | Complex JSON with sources, operators, destinations |
+| **GraphQLApi** | `graphql-definition.json` | May reference data sources | — |
+| **KQLDashboard** | `RealTimeDashboard.json` | ✅ Data sources reference Eventhouses/KQL DBs | Dashboard queries embed data source references |
+| **KQLDatabase** | `DatabaseProperties.json`, `DatabaseSchema.kql` | ✅ Parent Eventhouse ID | Schema includes table/mapping/policy definitions |
+| **KQLQueryset** | `RealTimeQueryset.json` | ✅ `databaseItemId` references KQL DB | — |
+| **Lakehouse** | `lakehouse.metadata.json`, optional `shortcuts.metadata.json` | ✅ Shortcuts reference other lakehouses | See [gotchas.md § Lakehouse](references/gotchas.md#lakehouse) |
+| **MirroredDatabase** | `mirroring.json` | May reference external sources | — |
+| **MLExperiment** | `mlexperiment.metadata.json` | Minimal — `{"dependencies":[]}` | — |
+| **Notebook** | `notebook-content.py` or `.ipynb` | ✅ Default lakehouse + environment bindings | See [gotchas.md § Notebook](references/gotchas.md#notebook) — **highest risk item type** |
+| **Reflex** | `ReflexEntities.json` | May reference Eventstreams | — |
+| **Report** | `definition.pbir`, `report.json`, `Staticreferences/` | ✅ Semantic model binding via `byConnection` or `byPath` | Do not author manually — use Power BI Desktop |
+| **SemanticModel** | `definition.pbism`, `definition/*.tmdl` (TMDL) or `model.bim` (TMSL) | ✅ Reports bind to it | See [gotchas.md § SemanticModel](references/gotchas.md#semanticmodel) |
+| **SparkJobDefinition** | `SparkJobDefinitionV1.json`, `Main/*.py`, `Libs/*.py` | ✅ Default lakehouse ID, environment ID | Similar binding issues as Notebooks |
+| **SQLDatabase** | `.sqlproj`, `.gitignore` | Minimal | SQL project format |
+| **UserDataFunction** | `definition.json`, `function_app.py`, `.references/functions.json` | Minimal | Python runtime function |
+| **VariableLibrary** | `variables.json`, `settings.json`, `valueSets/*.json` | Consumed by many item types | See [gotchas.md § VariableLibrary](references/gotchas.md#variablelibrary) |
+| **Warehouse** | `.platform` only (minimal) | Minimal | Data not deployed — structure only |
 
 ---
 
@@ -693,7 +829,7 @@ Not all Fabric items support Git integration and deployment equally. Before buil
 | `ReferencedEntityAccessDenied` deploying variable library | SPN lacks read access to items/connections referenced in variable library | Ensure the SPN has at least read permission on all items and connections referenced in variable library item reference and connection reference variables |
 | `Alm_InvalidRequest_WorkloadUnavailable` on first deploy | Workload services not yet initialized after workspace assignment to pipeline | Wait 60–120s after workspace assignment, then retry. Deploy PBI items first, then Fabric-native items. Subsequent deploys work normally |
 | Lakehouse Tables API returns empty `data: []` | Spark-managed Delta tables not visible via REST API | Tables created by `saveAsTable()` may not surface in `GET .../lakehouses/{id}/tables`. Use notebook execution for data verification instead |
-| Notebook deploys successfully but appears blank in Fabric | FabricGitSource `.py` format has incorrect whitespace or compact JSON | The `.py` format is whitespace-sensitive — blank lines required after markers, multi-line JSON in `# META` blocks. See [local-deployment.md § Item definition formats](resources/local-deployment.md#step-2-set-up-repository-structure) or use `.ipynb` format instead |
-| Notebook deploys but `RunNotebook` fails with "Job instance failed without detail error" | Notebook metadata missing `default_lakehouse` and/or `default_lakehouse_workspace_id` | The `# META dependencies.lakehouse` block must include all three fields: `default_lakehouse` (GUID), `default_lakehouse_name`, and `default_lakehouse_workspace_id` (GUID). Fix with either: (A) add all three GUIDs to `parameter.yml` for deploy-time replacement, or (B) use variable library `%%configure` for runtime resolution — see [local-deployment.md](resources/local-deployment.md) and [variable-libraries.md](resources/variable-libraries.md) |
+| Notebook deploys successfully but appears blank in Fabric | FabricGitSource `.py` format has incorrect whitespace or compact JSON | The `.py` format is whitespace-sensitive — blank lines required after markers, multi-line JSON in `# META` blocks. See [local-deployment.md § Item definition formats](references/local-deployment.md#step-2-set-up-repository-structure) or use `.ipynb` format instead |
+| Notebook deploys but `RunNotebook` fails with "Job instance failed without detail error" | Notebook metadata missing `default_lakehouse` and/or `default_lakehouse_workspace_id` | The `# META dependencies.lakehouse` block must include all three fields: `default_lakehouse` (GUID), `default_lakehouse_name`, and `default_lakehouse_workspace_id` (GUID). Fix with either: (A) add all three GUIDs to `parameter.yml` for deploy-time replacement, or (B) use variable library `%%configure` for runtime resolution — see [local-deployment.md](references/local-deployment.md) and [variable-libraries.md](references/variable-libraries.md) |
 
 > Ref: https://learn.microsoft.com/fabric/cicd/troubleshoot-cicd
